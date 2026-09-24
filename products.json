@@ -1,1 +1,14 @@
-{"products":[]}
+{
+  "products": [
+    {
+      "id": "mufy9zyi",
+      "name": "FRISIAN FLAG PCH KKM PUTIH 535G",
+      "category": "Beverages",
+      "price": 14900,
+      "status": "tersedia",
+      "desc": "Susu Kental Manis putih Pch 535g",
+      "image": "uploads/1790279644693.jpg",
+      "updated": "2026-09-24T19:54:06.283Z"
+    }
+  ]
+}

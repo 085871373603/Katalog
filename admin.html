@@ -39,7 +39,7 @@ const dec=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g,'')),
 const say=(m,e)=>{const t=$('#toast');t.textContent=m;t.className=e?'err':'';t.style.display='block';setTimeout(()=>t.style.display='none',Math.max(3500,m.length*70))};
 const shrink=f=>new Promise((ok,no)=>{const i=new Image();i.onload=()=>{const r=Math.min(1,1200/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*r;c.height=i.height*r;c.getContext('2d').drawImage(i,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',.82).split(',')[1])};i.onerror=()=>no(Error('File gambar tidak bisa dibaca'));i.src=URL.createObjectURL(f)});
 async function get(){const r=await api(`contents/${C.dataPath}?ref=${C.branch}`);if(r.status==404)return{sha:null,data:{products:[]}};if(!r.ok)throw Error((await r.json()).message);const j=await r.json();return{sha:j.sha,data:JSON.parse(dec(j.content))}}
-const PERM='Token belum punya izin menulis ke repo ini. Edit token di GitHub: pilih repo ini di Repository access, lalu set Contents ke Read and write.';
+const PERM='Token belum bisa menulis ke repo ini. Di GitHub, edit token: (1) Repository access, pilih repo ini; (2) Repository permissions, klik Add permissions, pilih Contents, ubah ke Read and write; lalu klik Update. Setelah itu tempel token lagi di sini.';
 async function put(path,content,msg,sha){const r=await api(`contents/${path}`,{method:'PUT',body:JSON.stringify({message:msg,content,branch:C.branch,...(sha&&{sha})})});if(!r.ok){const m=(await r.json()).message||'Gagal menyimpan';throw Error(r.status==403||/not accessible/i.test(m)?PERM:m)}}
 async function del(path,msg){try{const j=await(await api(`contents/${path}?ref=${C.branch}`)).json();await api(`contents/${path}`,{method:'DELETE',body:JSON.stringify({message:msg,sha:j.sha,branch:C.branch})})}catch{}}
 async function mutate(fn,msg){const{sha,data}=await get();fn(data);await put(C.dataPath,enc(JSON.stringify(data,null,2)),msg,sha);P=data.products;draw()}
@@ -48,12 +48,14 @@ function draw(){
   $('#cl').innerHTML=[...new Set(P.map(p=>p.category).filter(Boolean))].map(c=>`<option value="${esc(c)}">`).join('');
   $('#list').innerHTML=P.length?P.map(p=>`<div class="row">${p.image?`<img src="${esc(p.image)}" alt="">`:'<span class="ph"></span>'}<div><b>${esc(p.name)}</b><br><span class="mut">${esc(p.category||'Tanpa kategori')} · Rp${Number(p.price).toLocaleString('id-ID')} · ${esc(p.status)}</span></div><button class="ghost" data-e="${esc(p.id)}">Edit</button><button class="bad" data-d="${esc(p.id)}">Hapus</button></div>`).join(''):'<p class="mut">Belum ada produk. Isi formulir untuk menambahkan yang pertama.</p>';
 }
+async function canWrite(){try{const r=await api('git/blobs',{method:'POST',body:JSON.stringify({content:'cek',encoding:'utf-8'})});return r.ok?'':r.status+': '+((await r.json()).message||'')}catch{return 'koneksi gagal'}}
 async function enter(){
   const L=$('#lerr');
   if(C.owner.startsWith('USERNAME')||C.repo.startsWith('NAMA')){L.textContent='config.js belum diisi. Ganti owner dan repo dengan milik Anda.';return false}
   if(!tok){L.textContent='Tempel token terlebih dulu.';return false}
   let r;try{r=await api('')}catch{L.textContent='Tidak bisa terhubung ke GitHub. Periksa koneksi internet Anda.';return false}
   if(!r.ok){L.textContent=r.status==401?'Token tidak valid atau sudah kedaluwarsa.':r.status==404?'Repo tidak ditemukan, atau token belum diberi akses ke repo ini. Periksa owner dan repo di config.js.':'Gagal masuk (kode '+r.status+').';return false}
+  const w=await canWrite();if(w){localStorage.removeItem('gh_tok');L.textContent=PERM+' (Detail: '+w+')';return false}
   $('#login').hidden=true;$('#app').hidden=false;
   try{P=(await get()).data.products}catch(e){say(e.message,1)}draw();return true;
 }

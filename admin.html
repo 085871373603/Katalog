@@ -1,0 +1,83 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Admin katalog</title><link rel="stylesheet" href="style.css">
+<style>
+.cols{display:grid;grid-template-columns:340px 1fr;gap:32px;padding:24px 0 60px;align-items:start}
+@media(max-width:800px){.cols{grid-template-columns:1fr}}
+form{display:grid;gap:12px}label{font-size:.9rem;font-weight:600;display:grid;gap:4px}
+.row{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.row img,.row .ph{width:56px;height:56px;aspect-ratio:1;flex:none}
+.row>div{flex:1;min-width:0}
+#login{max-width:400px;margin:12vh auto;padding:0 20px;display:grid;gap:14px}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:6px;display:none}
+#toast.err{background:var(--bad);color:#fff}
+</style></head><body>
+<section id="login"><h1>Masuk admin</h1>
+<p class="mut">Tempel GitHub token (fine-grained, izin Contents: Read and write, khusus repo katalog ini).</p>
+<input id="tok" type="password" placeholder="github_pat_…" autocomplete="off"><button id="go">Masuk</button><p class="mut" id="lerr"></p></section>
+<main id="app" hidden>
+<header><div class="wrap"><h1>Kelola katalog</h1><span><a href="index.html">Lihat halaman publik</a> <button class="ghost" id="out">Keluar</button></span></div></header>
+<div class="wrap cols">
+<form id="f"><h2 id="ft">Tambah produk</h2>
+<label>Nama<input id="n" required maxlength="80"></label>
+<label>Kategori<input id="c" list="cl" maxlength="40"></label><datalist id="cl"></datalist>
+<label>Harga (Rp)<input id="p" type="number" min="0" required></label>
+<label>Status<select id="s"><option value="tersedia">Tersedia</option><option value="habis">Habis</option></select></label>
+<label>Deskripsi<textarea id="d" rows="4" maxlength="600"></textarea></label>
+<label>Gambar<input id="i" type="file" accept="image/*"></label>
+<img id="pv" alt="Pratinjau" hidden style="width:120px;border-radius:4px">
+<button id="sv">Simpan produk</button><button type="button" class="ghost" id="cx" hidden>Batal edit</button></form>
+<div><h2>Produk <span class="mut" id="cnt"></span></h2><div id="list"></div>
+<p class="mut" style="margin-top:12px">Perubahan tampil di halaman publik setelah deploy selesai (sekitar 30 detik).</p></div>
+</div></main><div id="toast" role="status"></div>
+<script src="config.js"></script>
+<script>
+const C=CFG,$=s=>document.querySelector(s);let tok=localStorage.getItem('gh_tok')||'',P=[],ed=null;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const api=(p,o={})=>fetch(`https://api.github.com/repos/${C.owner}/${C.repo}/${p}`,{...o,headers:{Authorization:'Bearer '+tok,Accept:'application/vnd.github+json'}});
+const enc=s=>{let b='';for(const x of new TextEncoder().encode(s))b+=String.fromCharCode(x);return btoa(b)};
+const dec=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g,'')),c=>c.charCodeAt(0)));
+const say=(m,e)=>{const t=$('#toast');t.textContent=m;t.className=e?'err':'';t.style.display='block';setTimeout(()=>t.style.display='none',3500)};
+const shrink=f=>new Promise((ok,no)=>{const i=new Image();i.onload=()=>{const r=Math.min(1,1200/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*r;c.height=i.height*r;c.getContext('2d').drawImage(i,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',.82).split(',')[1])};i.onerror=()=>no(Error('File gambar tidak bisa dibaca'));i.src=URL.createObjectURL(f)});
+async function get(){const r=await api(`contents/${C.dataPath}?ref=${C.branch}`);if(r.status==404)return{sha:null,data:{products:[]}};if(!r.ok)throw Error((await r.json()).message);const j=await r.json();return{sha:j.sha,data:JSON.parse(dec(j.content))}}
+async function put(path,content,msg,sha){const r=await api(`contents/${path}`,{method:'PUT',body:JSON.stringify({message:msg,content,branch:C.branch,...(sha&&{sha})})});if(!r.ok)throw Error((await r.json()).message)}
+async function del(path,msg){try{const j=await(await api(`contents/${path}?ref=${C.branch}`)).json();await api(`contents/${path}`,{method:'DELETE',body:JSON.stringify({message:msg,sha:j.sha,branch:C.branch})})}catch{}}
+async function mutate(fn,msg){const{sha,data}=await get();fn(data);await put(C.dataPath,enc(JSON.stringify(data,null,2)),msg,sha);P=data.products;draw()}
+function draw(){
+  $('#cnt').textContent=`(${P.length})`;
+  $('#cl').innerHTML=[...new Set(P.map(p=>p.category).filter(Boolean))].map(c=>`<option value="${esc(c)}">`).join('');
+  $('#list').innerHTML=P.length?P.map(p=>`<div class="row">${p.image?`<img src="${esc(p.image)}" alt="">`:'<span class="ph"></span>'}<div><b>${esc(p.name)}</b><br><span class="mut">${esc(p.category||'Tanpa kategori')} · Rp${Number(p.price).toLocaleString('id-ID')} · ${esc(p.status)}</span></div><button class="ghost" data-e="${esc(p.id)}">Edit</button><button class="bad" data-d="${esc(p.id)}">Hapus</button></div>`).join(''):'<p class="mut">Belum ada produk. Isi formulir untuk menambahkan yang pertama.</p>';
+}
+async function enter(){
+  const r=await api('');if(!r.ok){$('#lerr').textContent='Token ditolak atau repo tidak ditemukan. Periksa token dan config.js.';return false}
+  $('#login').hidden=true;$('#app').hidden=false;
+  try{P=(await get()).data.products}catch(e){say(e.message,1)}draw();return true;
+}
+$('#go').onclick=async()=>{tok=$('#tok').value.trim();if(await enter())localStorage.setItem('gh_tok',tok)};
+$('#out').onclick=()=>{localStorage.removeItem('gh_tok');location.reload()};
+const reset=()=>{ed=null;$('#f').reset();$('#ft').textContent='Tambah produk';$('#cx').hidden=true;$('#pv').hidden=true};
+$('#cx').onclick=reset;
+$('#i').onchange=e=>{const f=e.target.files[0];$('#pv').hidden=!f;if(f)$('#pv').src=URL.createObjectURL(f)};
+$('#list').onclick=async e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.e){ed=P.find(p=>p.id==b.dataset.e);$('#ft').textContent='Edit produk';$('#n').value=ed.name;$('#c').value=ed.category||'';$('#p').value=ed.price;$('#s').value=ed.status;$('#d').value=ed.desc||'';$('#cx').hidden=false;scrollTo(0,0)}
+  if(b.dataset.d&&confirm('Hapus produk ini beserta gambarnya?')){
+    const p=P.find(x=>x.id==b.dataset.d);b.disabled=true;
+    try{await mutate(d=>d.products=d.products.filter(x=>x.id!=p.id),'Hapus produk: '+p.name);if(p.image)await del(p.image,'Hapus gambar');say('Produk dihapus')}
+    catch(x){say(x.message,1);b.disabled=false}
+  }
+};
+$('#f').onsubmit=async e=>{
+  e.preventDefault();const b=$('#sv');b.disabled=true;b.textContent='Menyimpan…';
+  try{
+    const f=$('#i').files[0],old=ed?.image;let img=old||'';
+    if(f){img=`${C.imageDir}/${Date.now()}.jpg`;await put(img,await shrink(f),'Upload gambar produk')}
+    const id=ed?ed.id:Date.now().toString(36);
+    const item={id,name:$('#n').value.trim(),category:$('#c').value.trim(),price:+$('#p').value,status:$('#s').value,desc:$('#d').value.trim(),image:img,updated:new Date().toISOString()};
+    await mutate(d=>{const i=d.products.findIndex(x=>x.id==id);i<0?d.products.unshift(item):d.products[i]=item},(ed?'Ubah':'Tambah')+' produk: '+item.name);
+    if(f&&old)await del(old,'Hapus gambar lama');
+    reset();say('Produk tersimpan');
+  }catch(x){say(x.message,1)}
+  b.disabled=false;b.textContent='Simpan produk';
+};
+if(tok)enter();
+</script></body></html>

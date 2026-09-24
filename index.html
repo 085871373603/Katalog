@@ -1,0 +1,29 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Katalog</title><link rel="stylesheet" href="style.css"></head><body>
+<header><div class="wrap"><h1 id="sn"></h1><input id="q" type="search" placeholder="Cari produk" aria-label="Cari produk" style="max-width:280px"></div></header>
+<div class="wrap"><div class="chips" id="ch"></div><div class="grid" id="g"></div></div>
+<dialog id="dl"></dialog>
+<script src="config.js"></script>
+<script>
+const C=CFG,$=s=>document.querySelector(s);let P=[],cat='';
+const rp=n=>'Rp'+Number(n).toLocaleString('id-ID');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+document.title=C.storeName;$('#sn').textContent=C.storeName;
+function draw(){
+  const q=$('#q').value.toLowerCase(),cs=[...new Set(P.map(p=>p.category).filter(Boolean))];
+  $('#ch').innerHTML=cs.length?['',...cs].map(c=>`<button class="${c===cat?'on':''}" data-c="${esc(c)}">${c?esc(c):'Semua'}</button>`).join(''):'';
+  const L=P.filter(p=>(!cat||p.category===cat)&&p.name.toLowerCase().includes(q));
+  $('#g').innerHTML=L.length?L.map(p=>`<button class="tile" data-i="${esc(p.id)}">${p.image?`<img loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}">`:'<span class="ph"></span>'}<b>${esc(p.name)}</b><span class="mut">${rp(p.price)}${p.status=='habis'?' · Habis':''}</span></button>`).join(''):'<p class="mut">Tidak ada produk yang cocok.</p>';
+}
+$('#ch').onclick=e=>{if(e.target.dataset.c!==undefined){cat=e.target.dataset.c;draw()}};
+$('#q').oninput=draw;
+$('#dl').onclick=e=>{if(e.target.id=='dl')e.target.close()};
+$('#g').onclick=e=>{
+  const t=e.target.closest('.tile');if(!t)return;
+  const p=P.find(x=>x.id==t.dataset.i),dl=$('#dl');
+  const wa=C.whatsapp?`<button data-u="https://wa.me/${esc(C.whatsapp)}?text=${encodeURIComponent('Halo, saya tertarik dengan '+p.name)}" onclick="open(this.dataset.u)">Pesan via WhatsApp</button>`:'';
+  dl.innerHTML=`<div class="det">${p.image?`<img src="${esc(p.image)}" alt="${esc(p.name)}">`:''}<div><h2>${esc(p.name)}</h2><p class="mut">${esc(p.category||'')}</p><p><b>${rp(p.price)}</b> ${p.status=='habis'?'(habis)':''}</p><p>${esc(p.desc)}</p>${wa}<button class="ghost" onclick="dl.close()">Tutup</button></div></div>`;
+  dl.showModal();
+};
+fetch(C.dataPath,{cache:'no-store'}).then(r=>r.json()).then(d=>{P=d.products;draw()}).catch(()=>{$('#g').innerHTML='<p class="mut">Katalog belum bisa dimuat. Muat ulang halaman.</p>'});
+</script></body></html>

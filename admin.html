@@ -33,7 +33,7 @@ form{display:grid;gap:12px}label{font-size:.9rem;font-weight:600;display:grid;ga
 <script>
 const C=CFG,$=s=>document.querySelector(s);let tok=localStorage.getItem('gh_tok')||'',P=[],ed=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const api=(p,o={})=>fetch(`https://api.github.com/repos/${C.owner}/${C.repo}/${p}`,{...o,headers:{Authorization:'Bearer '+tok,Accept:'application/vnd.github+json'}});
+const api=(p,o={})=>fetch(`https://api.github.com/repos/${C.owner}/${C.repo}${p?'/'+p:''}`,{...o,headers:{Authorization:'Bearer '+tok,Accept:'application/vnd.github+json'}});
 const enc=s=>{let b='';for(const x of new TextEncoder().encode(s))b+=String.fromCharCode(x);return btoa(b)};
 const dec=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g,'')),c=>c.charCodeAt(0)));
 const say=(m,e)=>{const t=$('#toast');t.textContent=m;t.className=e?'err':'';t.style.display='block';setTimeout(()=>t.style.display='none',3500)};
@@ -48,11 +48,20 @@ function draw(){
   $('#list').innerHTML=P.length?P.map(p=>`<div class="row">${p.image?`<img src="${esc(p.image)}" alt="">`:'<span class="ph"></span>'}<div><b>${esc(p.name)}</b><br><span class="mut">${esc(p.category||'Tanpa kategori')} · Rp${Number(p.price).toLocaleString('id-ID')} · ${esc(p.status)}</span></div><button class="ghost" data-e="${esc(p.id)}">Edit</button><button class="bad" data-d="${esc(p.id)}">Hapus</button></div>`).join(''):'<p class="mut">Belum ada produk. Isi formulir untuk menambahkan yang pertama.</p>';
 }
 async function enter(){
-  const r=await api('');if(!r.ok){$('#lerr').textContent='Token ditolak atau repo tidak ditemukan. Periksa token dan config.js.';return false}
+  const L=$('#lerr');
+  if(C.owner.startsWith('USERNAME')||C.repo.startsWith('NAMA')){L.textContent='config.js belum diisi. Ganti owner dan repo dengan milik Anda.';return false}
+  if(!tok){L.textContent='Tempel token terlebih dulu.';return false}
+  let r;try{r=await api('')}catch{L.textContent='Tidak bisa terhubung ke GitHub. Periksa koneksi internet Anda.';return false}
+  if(!r.ok){L.textContent=r.status==401?'Token tidak valid atau sudah kedaluwarsa.':r.status==404?'Repo tidak ditemukan, atau token belum diberi akses ke repo ini. Periksa owner dan repo di config.js.':'Gagal masuk (kode '+r.status+').';return false}
   $('#login').hidden=true;$('#app').hidden=false;
   try{P=(await get()).data.products}catch(e){say(e.message,1)}draw();return true;
 }
-$('#go').onclick=async()=>{tok=$('#tok').value.trim();if(await enter())localStorage.setItem('gh_tok',tok)};
+$('#go').onclick=async()=>{
+  const b=$('#go');tok=$('#tok').value.trim();b.disabled=true;b.textContent='Memeriksa…';$('#lerr').textContent='';
+  try{if(await enter())localStorage.setItem('gh_tok',tok)}catch(e){$('#lerr').textContent='Terjadi kesalahan: '+e.message}
+  b.disabled=false;b.textContent='Masuk';
+};
+$('#tok').onkeydown=e=>{if(e.key=='Enter')$('#go').click()};
 $('#out').onclick=()=>{localStorage.removeItem('gh_tok');location.reload()};
 const reset=()=>{ed=null;$('#f').reset();$('#ft').textContent='Tambah produk';$('#cx').hidden=true;$('#pv').hidden=true};
 $('#cx').onclick=reset;

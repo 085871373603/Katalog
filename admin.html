@@ -8,7 +8,7 @@ form{display:grid;gap:12px}label{font-size:.9rem;font-weight:600;display:grid;ga
 .row img,.row .ph{width:56px;height:56px;aspect-ratio:1;flex:none}
 .row>div{flex:1;min-width:0}
 #login{max-width:400px;margin:12vh auto;padding:0 20px;display:grid;gap:14px}
-#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:6px;display:none}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 32px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:6px;display:none}
 #toast.err{background:var(--bad);color:#fff}
 </style></head><body>
 <section id="login"><h1>Masuk admin</h1>
@@ -36,10 +36,11 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const api=(p,o={})=>fetch(`https://api.github.com/repos/${C.owner}/${C.repo}${p?'/'+p:''}`,{...o,headers:{Authorization:'Bearer '+tok,Accept:'application/vnd.github+json'}});
 const enc=s=>{let b='';for(const x of new TextEncoder().encode(s))b+=String.fromCharCode(x);return btoa(b)};
 const dec=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g,'')),c=>c.charCodeAt(0)));
-const say=(m,e)=>{const t=$('#toast');t.textContent=m;t.className=e?'err':'';t.style.display='block';setTimeout(()=>t.style.display='none',3500)};
+const say=(m,e)=>{const t=$('#toast');t.textContent=m;t.className=e?'err':'';t.style.display='block';setTimeout(()=>t.style.display='none',Math.max(3500,m.length*70))};
 const shrink=f=>new Promise((ok,no)=>{const i=new Image();i.onload=()=>{const r=Math.min(1,1200/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*r;c.height=i.height*r;c.getContext('2d').drawImage(i,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',.82).split(',')[1])};i.onerror=()=>no(Error('File gambar tidak bisa dibaca'));i.src=URL.createObjectURL(f)});
 async function get(){const r=await api(`contents/${C.dataPath}?ref=${C.branch}`);if(r.status==404)return{sha:null,data:{products:[]}};if(!r.ok)throw Error((await r.json()).message);const j=await r.json();return{sha:j.sha,data:JSON.parse(dec(j.content))}}
-async function put(path,content,msg,sha){const r=await api(`contents/${path}`,{method:'PUT',body:JSON.stringify({message:msg,content,branch:C.branch,...(sha&&{sha})})});if(!r.ok)throw Error((await r.json()).message)}
+const PERM='Token belum punya izin menulis ke repo ini. Edit token di GitHub: pilih repo ini di Repository access, lalu set Contents ke Read and write.';
+async function put(path,content,msg,sha){const r=await api(`contents/${path}`,{method:'PUT',body:JSON.stringify({message:msg,content,branch:C.branch,...(sha&&{sha})})});if(!r.ok){const m=(await r.json()).message||'Gagal menyimpan';throw Error(r.status==403||/not accessible/i.test(m)?PERM:m)}}
 async function del(path,msg){try{const j=await(await api(`contents/${path}?ref=${C.branch}`)).json();await api(`contents/${path}`,{method:'DELETE',body:JSON.stringify({message:msg,sha:j.sha,branch:C.branch})})}catch{}}
 async function mutate(fn,msg){const{sha,data}=await get();fn(data);await put(C.dataPath,enc(JSON.stringify(data,null,2)),msg,sha);P=data.products;draw()}
 function draw(){

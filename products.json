@@ -4,11 +4,15 @@
       "id": "mugzfnf5",
       "name": "ABC SBL EXTRA PEDAS 130ML",
       "category": "Dapur",
-      "price": 5000,
-      "status": "habis",
+      "price": 18500,
+      "originalPrice": 10900,
+      "stock": 10,
+      "promo": "Beli 2 Lebih hemat",
+      "bxgy": null,
+      "status": "tersedia",
       "desc": "Abc sambal extra pedas pet 130ml",
       "image": "uploads/1790342052091.jpg",
-      "updated": "2026-09-25T18:05:49.493Z"
+      "updated": "2026-09-25T20:49:20.442Z"
     },
     {
       "id": "mugd8xsd",

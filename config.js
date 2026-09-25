@@ -5,5 +5,7 @@ window.CFG = {
   dataPath: "products.json",
   imageDir: "uploads",
   storeName: "Katalog Saya",
-  checkoutWhatsapp: "085871373603"   // nomor WA tujuan checkout
+  checkoutWhatsapp: "085871373603",  // nomor WA tujuan checkout
+  bannerDataPath: "banners.json",
+  bannerImageDir: "uploads/banners"
 };

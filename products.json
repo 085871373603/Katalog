@@ -1,6 +1,16 @@
 {
   "products": [
     {
+      "id": "mugd8xsd",
+      "name": "GLOW&LOVELY FF VIT C GLOW 100G",
+      "category": "Pembersih Wajah",
+      "price": 22900,
+      "status": "tersedia",
+      "desc": "Facial Foam Vitamin C Glow 100g",
+      "image": "uploads/1790304788980.jpg",
+      "updated": "2026-09-25T02:53:11.053Z"
+    },
+    {
       "id": "mugd6tyj",
       "name": "GLOW&LOVELY FF MULTI VITAMIN 100G",
       "category": "Pembersih Wajah",

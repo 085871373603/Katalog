@@ -59,6 +59,14 @@
       "order": 1,
       "active": true,
       "updated": "2026-09-25T12:57:45.444Z"
+    },
+    {
+      "id": "bmugzi4az",
+      "productId": "mugzfnf5",
+      "image": "uploads/banners/1790342168662.jpg",
+      "order": 2,
+      "active": true,
+      "updated": "2026-09-25T13:16:10.955Z"
     }
   ]
 }

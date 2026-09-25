@@ -2,6 +2,7 @@
 <title>Katalog</title><link rel="stylesheet" href="style.css"></head><body>
 <header><div class="wrap"><h1 id="sn"></h1><input id="q" type="search" placeholder="Cari produk" aria-label="Cari produk" style="max-width:220px"></div></header>
 <div class="wrap"><div class="chips" id="ch"></div><div class="grid2" id="g"></div></div>
+<footer id="ft"></footer>
 
 <button class="fab" id="fab" hidden onclick="openCart()">🛒 <span class="cnt" id="fabCnt">0</span> <span id="fabTot"></span></button>
 
@@ -22,6 +23,7 @@ const rp=n=>'Rp'+Number(n||0).toLocaleString('id-ID');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const find=id=>P.find(p=>p.id==id);
 document.title=C.storeName;$('#sn').textContent=C.storeName;
+$('#ft').textContent=`© ${new Date().getFullYear()} ${C.storeName}`;
 
 function toast(m){const t=$('#toast2');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2600)}
 

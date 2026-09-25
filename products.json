@@ -1,6 +1,16 @@
 {
   "products": [
     {
+      "id": "mugzfnf5",
+      "name": "ABC SBL EXTRA PEDAS 130ML",
+      "category": "Dapur",
+      "price": 5000,
+      "status": "tersedia",
+      "desc": "Abc sambal extra pedas pet 130ml",
+      "image": "uploads/1790342052091.jpg",
+      "updated": "2026-09-25T13:14:15.765Z"
+    },
+    {
       "id": "mugd8xsd",
       "name": "GLOW&LOVELY FF VIT C GLOW 100G",
       "category": "Pembersih Wajah",

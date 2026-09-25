@@ -41,7 +41,7 @@ function draw(){
         ${p.status=='habis'?'<span class="badge">Stok habis</span>':''}
         <div class="card-actions">
           <button class="b-more" data-more="${esc(p.id)}">Selengkapnya</button>
-          <button class="b-cart" data-add="${esc(p.id)}" ${p.status=='habis'?'disabled':''}>Keranjang</button>
+          <button class="b-cart" data-add="${esc(p.id)}" ${p.status=='habis'?'disabled':''}>🛒</button>
         </div>
       </div>
     </div>`).join(''):'<p class="mut" style="grid-column:1/-1">Tidak ada produk yang cocok.</p>';

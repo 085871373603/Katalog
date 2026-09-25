@@ -1,4 +1,3 @@
-
 window.CFG = {
   owner: "085871373603",   // ganti: username/organisasi GitHub
   repo: "Katalog",          // ganti: nama repo katalog ini

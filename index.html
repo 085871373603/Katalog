@@ -1,10 +1,27 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Katalog</title><link rel="stylesheet" href="style.css"></head><body>
 <header><div class="wrap"><h1 id="sn"></h1><input id="q" type="search" placeholder="Cari produk" aria-label="Cari produk" style="max-width:220px"></div></header>
+
+<!-- ===== Banner promosi ===== -->
+<section id="promo" class="promo-wrap" hidden aria-label="Promosi">
+  <div class="wrap">
+    <div class="promo-shell">
+      <div class="promo-viewport" id="promoViewport">
+        <div class="promo-track" id="promoTrack"></div>
+        <button type="button" class="promo-nav prev" id="promoPrev" aria-label="Banner sebelumnya">‹</button>
+        <button type="button" class="promo-nav next" id="promoNext" aria-label="Banner berikutnya">›</button>
+      </div>
+      <div class="promo-dots" id="promoDots" aria-label="Navigasi banner"></div>
+    </div>
+  </div>
+</section>
+
 <div class="wrap"><div class="chips" id="ch"></div><div class="grid2" id="g"></div></div>
 <footer id="ft"></footer>
 
-<button class="fab" id="fab" hidden onclick="openCart()">🛒 <span class="cnt" id="fabCnt">0</span> <span id="fabTot"></span></button>
+<button class="fab" id="fab" hidden onclick="openCart()" aria-label="Buka keranjang">
+  <img src="img/keranjang.png" alt=""> <span class="cnt" id="fabCnt">0</span> <span id="fabTot"></span>
+</button>
 
 <dialog id="dl"></dialog>
 <dialog id="cartDl"></dialog>
@@ -14,10 +31,11 @@
 <script src="config.js"></script>
 <script>
 const C=CFG,$=s=>document.querySelector(s);
-let P=[],cat='';
+let P=[],B=[],cat='';
 let cart=JSON.parse(localStorage.getItem('cart_v1')||'[]');   // [{id,qty}]
 let addr=JSON.parse(localStorage.getItem('addr_v1')||'null');
-let pendingItems=null, pendingIsCart=false, curId=null;
+let pendingItems=null,pendingIsCart=false,curId=null;
+let promoIndex=0,promoTimer=null,promoPauseTimer=null,promoDragging=false,promoDragStartX=0,promoDragStartScroll=0;
 
 const rp=n=>'Rp'+Number(n||0).toLocaleString('id-ID');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -25,12 +43,131 @@ const find=id=>P.find(p=>p.id==id);
 document.title=C.storeName;$('#sn').textContent=C.storeName;
 $('#ft').textContent=`© ${new Date().getFullYear()} ${C.storeName}`;
 
-function toast(m){const t=$('#toast2');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2600)}
+function toast(m){const t=$('#toast2');t.textContent=m;t.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.display='none',2600)}
+
+/* ---------- banner promosi ---------- */
+function getActiveBanners(){
+  return B
+    .filter(b=>b&&b.active&&b.image&&find(b.productId))
+    .sort((a,b)=>(+a.order||9999)-(+b.order||9999));
+}
+
+function drawBanners(){
+  const list=getActiveBanners();
+  const promo=$('#promo');
+  if(!list.length){
+    promo.hidden=true;
+    stopPromoAutoplay();
+    $('#promoTrack').innerHTML='';
+    $('#promoDots').innerHTML='';
+    return;
+  }
+
+  promo.hidden=false;
+  promoIndex=Math.min(promoIndex,list.length-1);
+
+  $('#promoTrack').innerHTML=list.map((b,i)=>{
+    const p=find(b.productId);
+    return `<button type="button" class="promo-slide" data-promo-product="${esc(b.productId)}" aria-label="Lihat ${esc(p.name)}" data-index="${i}">
+      <img src="${esc(b.image)}" alt="${esc(p.name)}" loading="${i===0?'eager':'lazy'}">
+      <span class="promo-caption"><b>${esc(p.name)}</b><small>Lihat produk</small></span>
+    </button>`;
+  }).join('');
+
+  $('#promoDots').innerHTML=list.map((_,i)=>
+    `<button type="button" class="promo-dot ${i===promoIndex?'on':''}" data-promo-index="${i}" aria-label="Banner ${i+1}"></button>`
+  ).join('');
+
+  bindPromoScroll();
+  scrollPromoTo(promoIndex,false);
+  updatePromoControls(list.length);
+  startPromoAutoplay(list.length);
+}
+
+function updatePromoControls(length){
+  $('#promoPrev').hidden=length<=1;
+  $('#promoNext').hidden=length<=1;
+  $('#promoDots').hidden=length<=1;
+}
+
+function bindPromoScroll(){
+  const vp=$('#promoViewport');
+  vp.onscroll=()=>{
+    const width=Math.max(vp.clientWidth,1);
+    const i=Math.round(vp.scrollLeft/width);
+    const list=getActiveBanners();
+    promoIndex=Math.max(0,Math.min(i,list.length-1));
+    document.querySelectorAll('.promo-dot').forEach((el,n)=>el.classList.toggle('on',n===promoIndex));
+  };
+}
+
+function scrollPromoTo(index,smooth=true){
+  const list=getActiveBanners();
+  if(!list.length)return;
+  promoIndex=(index+list.length)%list.length;
+  const vp=$('#promoViewport');
+  vp.scrollTo({left:promoIndex*vp.clientWidth,behavior:smooth?'smooth':'auto'});
+  document.querySelectorAll('.promo-dot').forEach((el,n)=>el.classList.toggle('on',n===promoIndex));
+}
+
+function startPromoAutoplay(length){
+  stopPromoAutoplay();
+  if(length<=1)return;
+  promoTimer=setInterval(()=>{
+    if(document.hidden)return;
+    scrollPromoTo(promoIndex+1,true);
+  },4500);
+}
+
+function stopPromoAutoplay(){
+  if(promoTimer){clearInterval(promoTimer);promoTimer=null}
+}
+
+function pausePromoBriefly(){
+  stopPromoAutoplay();
+  clearTimeout(promoPauseTimer);
+  if(getActiveBanners().length>1){
+    promoPauseTimer=setTimeout(()=>startPromoAutoplay(getActiveBanners().length),5000);
+  }
+}
+
+$('#promoPrev').onclick=()=>{pausePromoBriefly();scrollPromoTo(promoIndex-1)};
+$('#promoNext').onclick=()=>{pausePromoBriefly();scrollPromoTo(promoIndex+1)};
+$('#promoDots').onclick=e=>{
+  const b=e.target.closest('[data-promo-index]');
+  if(!b)return;
+  pausePromoBriefly();
+  scrollPromoTo(+b.dataset.promoIndex);
+};
+
+$('#promoTrack').onclick=e=>{
+  if(promoDragging)return;
+  const slide=e.target.closest('[data-promo-product]');
+  if(!slide)return;
+  openDetail(slide.dataset.promoProduct);
+};
+
+const promoViewport=$('#promoViewport');
+promoViewport.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='mouse')return;
+  promoDragging=false;
+  promoDragStartX=e.clientX;
+  promoDragStartScroll=promoViewport.scrollLeft;
+});
+promoViewport.addEventListener('pointermove',e=>{
+  if(e.pointerType==='mouse')return;
+  if(Math.abs(e.clientX-promoDragStartX)>8)promoDragging=true;
+});
+promoViewport.addEventListener('pointerup',()=>{
+  if(promoDragging)pausePromoBriefly();
+});
+promoViewport.addEventListener('mouseenter',pausePromoBriefly);
+promoViewport.addEventListener('mouseleave',()=>startPromoAutoplay(getActiveBanners().length));
 
 /* ---------- grid ---------- */
 function draw(){
   const q=$('#q').value.toLowerCase(),cs=[...new Set(P.map(p=>p.category).filter(Boolean))];
-  $('#ch').innerHTML=cs.length?['',...cs].map(c=>`<button class="${c===cat?'on':''}" data-c="${esc(c)}">${c?esc(c):'Semua'}</button>`).join(''):'';
+  $('#ch').innerHTML=cs.length?['',...cs].map(c=>`<button class="${c===cat?'on':''}" data-c="${esc(c)}">${c?esc(c):'Semua'}</button>`).join():'';
   const L=P.filter(p=>(!cat||p.category===cat)&&p.name.toLowerCase().includes(q));
   $('#g').innerHTML=L.length?L.map(p=>`
     <div class="card">
@@ -41,7 +178,9 @@ function draw(){
         ${p.status=='habis'?'<span class="badge">Stok habis</span>':''}
         <div class="card-actions">
           <button class="b-more" data-more="${esc(p.id)}">Selengkapnya</button>
-          <button class="b-cart" data-add="${esc(p.id)}" ${p.status=='habis'?'disabled':''}>🛒</button>
+          <button class="b-cart" data-add="${esc(p.id)}" ${p.status=='habis'?'disabled':''} aria-label="Tambah ke keranjang">
+            <img src="img/keranjang.png" alt="">
+          </button>
         </div>
       </div>
     </div>`).join(''):'<p class="mut" style="grid-column:1/-1">Tidak ada produk yang cocok.</p>';
@@ -207,6 +346,23 @@ function sendWa(){
   $('#cartDl').close();
 }
 
+/* ---------- proteksi gesture aplikasi ---------- */
+document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
+document.addEventListener('touchmove',e=>{
+  if(e.touches.length>1)e.preventDefault();
+},{passive:false});
+
 updateFab();
-fetch(C.dataPath,{cache:'no-store'}).then(r=>r.json()).then(d=>{P=d.products;draw()}).catch(()=>{$('#g').innerHTML='<p class="mut" style="grid-column:1/-1">Katalog belum bisa dimuat. Muat ulang halaman.</p>'});
+
+fetch(C.dataPath,{cache:'no-store'})
+  .then(r=>r.json())
+  .then(d=>{
+    P=Array.isArray(d.products)?d.products:[];
+    B=Array.isArray(d.banners)?d.banners:[];
+    draw();
+    drawBanners();
+  })
+  .catch(()=>{
+    $('#g').innerHTML='<p class="mut" style="grid-column:1/-1">Katalog belum bisa dimuat. Muat ulang halaman.</p>';
+  });
 </script></body></html>

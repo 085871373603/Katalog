@@ -1,1 +1,13 @@
-{"banners":[]}
+{
+  "banners": [
+    {
+      "id": "muhft08e",
+      "image": "uploads/banners/1790369549884.jpg",
+      "productIds": [
+        "mugd8xsd",
+        "mugd6tyj"
+      ],
+      "updated": "2026-09-25T20:52:32.750Z"
+    }
+  ]
+}

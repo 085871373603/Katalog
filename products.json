@@ -33,10 +33,14 @@
       "name": "GLOW&LOVELY FF MULTI VITAMIN 100G",
       "category": "Pembersih Wajah",
       "price": 22900,
+      "originalPrice": 38500,
+      "stock": 5,
+      "promo": "",
+      "bxgy": null,
       "status": "tersedia",
       "desc": "Facial Foam Multi Vitamin 100g",
       "image": "uploads/1790304690361.jpg",
-      "updated": "2026-09-25T02:51:32.785Z"
+      "updated": "2026-09-25T21:01:18.310Z"
     },
     {
       "id": "mugbmeb6",

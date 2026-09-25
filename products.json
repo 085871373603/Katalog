@@ -1,6 +1,16 @@
 {
   "products": [
     {
+      "id": "mugbmeb6",
+      "name": "FRISIAN FLAG PCH KKM COKELAT 535G",
+      "category": "Beverages",
+      "price": 14900,
+      "status": "tersedia",
+      "desc": "Susu Kental Manis Cokelat Pch 535g",
+      "image": "uploads/1790302057768.jpg",
+      "updated": "2026-09-25T02:07:39.763Z"
+    },
+    {
       "id": "mufy9zyi",
       "name": "FRISIAN FLAG PCH KKM PUTIH 535G",
       "category": "Beverages",

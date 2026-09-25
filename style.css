@@ -101,31 +101,34 @@ form.addr button[type=submit]{background:var(--green-dark);border-color:var(--gr
 #toast.err{background:var(--bad)}
 
 /* admin */
+body{overflow-x:hidden}
 #login{max-width:400px;margin:12vh auto;padding:0 20px;display:grid;gap:14px}
 .admin-bar{background:var(--red);border-bottom:3px solid var(--red-dark);position:sticky;top:0;z-index:5}
 .admin-bar .wrap{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:14px 20px}
 .admin-bar h1{color:#fff;font-size:1.2rem;font-weight:800}
 .admin-bar-actions{display:flex;gap:8px;flex-wrap:wrap}
-.admin-layout{display:grid;grid-template-columns:1fr;gap:20px;padding:20px 20px 60px}
-@media(min-width:900px){.admin-layout{grid-template-columns:360px 1fr;align-items:start}}
-.panel{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}
+.admin-layout{padding:20px 20px 60px;min-width:0}
+.panel{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
 .panel h2{margin-bottom:12px;font-size:1.05rem}
-.panel form{display:grid;gap:12px}
-.panel label{font-size:.9rem;font-weight:700;display:grid;gap:4px}
 #pv{width:100%;max-width:160px;border-radius:6px}
 .form-actions{display:flex;gap:10px;flex-wrap:wrap}
+
+/* forms inside popups (product form, address form) */
+.dbody form{display:grid;gap:12px;margin-top:10px}
+.dbody form label{font-size:.9rem;font-weight:700;display:grid;gap:4px}
 
 /* buttons: utility classes for consistent, varied colors */
 .btn{cursor:pointer;border-radius:6px;font-weight:700;padding:10px 16px;border:1px solid transparent}
 .btn.sm{padding:7px 12px;font-size:.85rem}
 .btn.green{background:var(--green);border-color:var(--green-dark);color:#fff}
 .btn.amber{background:var(--amber);border-color:var(--amber-dark);color:#1a1a1a}
+.btn.red{background:var(--red);border-color:var(--red-dark);color:#fff}
 .btn.ghost{background:#fff;border-color:var(--line);color:var(--ink)}
 .btn.bad{background:#fff;border-color:var(--line);color:var(--bad)}
 a.btn{display:inline-block;text-decoration:none;text-align:center}
 
 /* product table */
-.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:8px}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:8px;min-width:0}
 table.plist{width:100%;border-collapse:collapse;font-size:.86rem;min-width:560px}
 table.plist th,table.plist td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
 table.plist th{background:#faf9f7;font-weight:700;white-space:nowrap}

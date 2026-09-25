@@ -1,6 +1,16 @@
 {
   "products": [
     {
+      "id": "mugd6tyj",
+      "name": "GLOW&LOVELY FF MULTI VITAMIN 100G",
+      "category": "Pembersih Wajah",
+      "price": 22900,
+      "status": "tersedia",
+      "desc": "Facial Foam Multi Vitamin 100g",
+      "image": "uploads/1790304690361.jpg",
+      "updated": "2026-09-25T02:51:32.785Z"
+    },
+    {
       "id": "mugbmeb6",
       "name": "FRISIAN FLAG PCH KKM COKELAT 535G",
       "category": "Beverages",

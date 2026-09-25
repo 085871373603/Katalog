@@ -186,8 +186,10 @@ function resetForm() {
   state.editingId = null;
   $('#f').reset();
   $('#ft').textContent = 'Tambah produk';
-  $('#cx').hidden = true;
   $('#pv').hidden = true;
+}
+function openFormDialog() {
+  $('#formDl').showModal();
 }
 function fillFormForEdit(product) {
   state.editingId = product.id;
@@ -197,9 +199,8 @@ function fillFormForEdit(product) {
   $('#p').value = product.price;
   $('#s').value = product.status;
   $('#d').value = product.desc || '';
-  $('#cx').hidden = false;
   $('#pv').hidden = true;
-  $('#panel-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  openFormDialog();
 }
 
 $('#i').addEventListener('change', e => {
@@ -251,6 +252,7 @@ $('#f').addEventListener('submit', async e => {
     };
     await saveProduct(item, editing?.image);
     resetForm();
+    $('#formDl').close();
     toast('Produk tersimpan');
   } catch (err) {
     toast(err.message, true);
@@ -259,8 +261,10 @@ $('#f').addEventListener('submit', async e => {
   saveBtn.textContent = 'Simpan produk';
 });
 
-$('#cx').addEventListener('click', resetForm);
-$('#addBtn').addEventListener('click', () => { resetForm(); $('#panel-form').scrollIntoView({ behavior: 'smooth' }); });
+$('#cx').addEventListener('click', () => $('#formDl').close());
+$('#fclose').addEventListener('click', () => $('#formDl').close());
+$('#formDl').addEventListener('click', e => { if (e.target.id === 'formDl') e.target.close(); });
+$('#addBtn').addEventListener('click', () => { resetForm(); openFormDialog(); });
 
 /* ---------- 8. Init ---------- */
 $('#go').addEventListener('click', async () => {

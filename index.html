@@ -1,29 +1,210 @@
 <!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Katalog</title><link rel="stylesheet" href="style.css"></head><body>
-<header><div class="wrap"><h1 id="sn"></h1><input id="q" type="search" placeholder="Cari produk" aria-label="Cari produk" style="max-width:280px"></div></header>
-<div class="wrap"><div class="chips" id="ch"></div><div class="grid" id="g"></div></div>
+<header><div class="wrap"><h1 id="sn"></h1><input id="q" type="search" placeholder="Cari produk" aria-label="Cari produk" style="max-width:220px"></div></header>
+<div class="wrap"><div class="chips" id="ch"></div><div class="grid2" id="g"></div></div>
+
+<button class="fab" id="fab" hidden onclick="openCart()">🛒 <span class="cnt" id="fabCnt">0</span> <span id="fabTot"></span></button>
+
 <dialog id="dl"></dialog>
+<dialog id="cartDl"></dialog>
+<dialog id="addrDl"></dialog>
+<div id="toast2" role="status"></div>
+
 <script src="config.js"></script>
 <script>
-const C=CFG,$=s=>document.querySelector(s);let P=[],cat='';
-const rp=n=>'Rp'+Number(n).toLocaleString('id-ID');
+const C=CFG,$=s=>document.querySelector(s);
+let P=[],cat='';
+let cart=JSON.parse(localStorage.getItem('cart_v1')||'[]');   // [{id,qty}]
+let addr=JSON.parse(localStorage.getItem('addr_v1')||'null');
+let pendingItems=null, pendingIsCart=false, curId=null;
+
+const rp=n=>'Rp'+Number(n||0).toLocaleString('id-ID');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const find=id=>P.find(p=>p.id==id);
 document.title=C.storeName;$('#sn').textContent=C.storeName;
+
+function toast(m){const t=$('#toast2');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2600)}
+
+/* ---------- grid ---------- */
 function draw(){
   const q=$('#q').value.toLowerCase(),cs=[...new Set(P.map(p=>p.category).filter(Boolean))];
   $('#ch').innerHTML=cs.length?['',...cs].map(c=>`<button class="${c===cat?'on':''}" data-c="${esc(c)}">${c?esc(c):'Semua'}</button>`).join(''):'';
   const L=P.filter(p=>(!cat||p.category===cat)&&p.name.toLowerCase().includes(q));
-  $('#g').innerHTML=L.length?L.map(p=>`<button class="tile" data-i="${esc(p.id)}">${p.image?`<img loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}">`:'<span class="ph"></span>'}<b>${esc(p.name)}</b><span class="mut">${rp(p.price)}${p.status=='habis'?' · Habis':''}</span></button>`).join(''):'<p class="mut">Tidak ada produk yang cocok.</p>';
+  $('#g').innerHTML=L.length?L.map(p=>`
+    <div class="card">
+      <button class="imgb" data-more="${esc(p.id)}">${p.image?`<img loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}">`:'<span class="ph"></span>'}</button>
+      <div class="info">
+        <b>${esc(p.name)}</b>
+        <span class="price">${rp(p.price)}</span>
+        ${p.status=='habis'?'<span class="badge">Stok habis</span>':''}
+        <div class="card-actions">
+          <button class="b-more" data-more="${esc(p.id)}">Selengkapnya</button>
+          <button class="b-cart" data-add="${esc(p.id)}" ${p.status=='habis'?'disabled':''}>Keranjang</button>
+        </div>
+      </div>
+    </div>`).join(''):'<p class="mut" style="grid-column:1/-1">Tidak ada produk yang cocok.</p>';
 }
 $('#ch').onclick=e=>{if(e.target.dataset.c!==undefined){cat=e.target.dataset.c;draw()}};
 $('#q').oninput=draw;
-$('#dl').onclick=e=>{if(e.target.id=='dl')e.target.close()};
 $('#g').onclick=e=>{
-  const t=e.target.closest('.tile');if(!t)return;
-  const p=P.find(x=>x.id==t.dataset.i),dl=$('#dl');
-  const wa=C.whatsapp?`<button data-u="https://wa.me/${esc(C.whatsapp)}?text=${encodeURIComponent('Halo, saya tertarik dengan '+p.name)}" onclick="open(this.dataset.u)">Pesan via WhatsApp</button>`:'';
-  dl.innerHTML=`<div class="det">${p.image?`<img src="${esc(p.image)}" alt="${esc(p.name)}">`:''}<div><h2>${esc(p.name)}</h2><p class="mut">${esc(p.category||'')}</p><p><b>${rp(p.price)}</b> ${p.status=='habis'?'(habis)':''}</p><p>${esc(p.desc)}</p>${wa}<button class="ghost" onclick="dl.close()">Tutup</button></div></div>`;
-  dl.showModal();
+  const m=e.target.closest('[data-more]'),a=e.target.closest('[data-add]');
+  if(m)openDetail(m.dataset.more);
+  if(a){addToCart(a.dataset.add,1);toast('Ditambahkan ke keranjang')}
 };
-fetch(C.dataPath,{cache:'no-store'}).then(r=>r.json()).then(d=>{P=d.products;draw()}).catch(()=>{$('#g').innerHTML='<p class="mut">Katalog belum bisa dimuat. Muat ulang halaman.</p>'});
+
+/* ---------- detail dialog ---------- */
+function openDetail(id){
+  curId=id;const p=find(id);if(!p)return;
+  $('#dl').innerHTML=`<button class="dclose" onclick="dl.close()">✕</button>
+    <div class="det">${p.image?`<img src="${esc(p.image)}" alt="${esc(p.name)}">`:'<span class="ph"></span>'}
+    <div>
+      <h2>${esc(p.name)}</h2>
+      <p class="mut">${esc(p.category||'')}</p>
+      <p><b>${rp(p.price)}</b> ${p.status=='habis'?'<span class="badge">· Stok habis</span>':''}</p>
+      <p>${esc(p.desc)}</p>
+      <div class="qty"><span>Jumlah</span><button type="button" onclick="stepQty(-1)">−</button><input id="mqty" type="number" min="1" value="1"><button type="button" onclick="stepQty(1)">+</button></div>
+      <button data-cart="${esc(p.id)}" ${p.status=='habis'?'disabled':''}>Tambah ke Keranjang</button>
+      <button class="ghost" data-buy="${esc(p.id)}" ${p.status=='habis'?'disabled':''}>Beli Langsung</button>
+    </div></div>`;
+  $('#dl').showModal();
+}
+function stepQty(d){const i=$('#mqty');i.value=Math.max(1,(+i.value||1)+d)}
+$('#dl').onclick=e=>{
+  if(e.target.id=='dl')e.target.close();
+  const c=e.target.closest('[data-cart]'),b=e.target.closest('[data-buy]');
+  const qty=Math.max(1,+$('#mqty')?.value||1);
+  if(c){addToCart(c.dataset.cart,qty);toast('Ditambahkan ke keranjang');$('#dl').close()}
+  if(b){$('#dl').close();startCheckout([{id:b.dataset.buy,qty}],false)}
+};
+
+/* ---------- cart ---------- */
+function saveCart(){localStorage.setItem('cart_v1',JSON.stringify(cart))}
+function cartCount(){return cart.reduce((s,x)=>s+x.qty,0)}
+function cartTotal(items){return (items||cart).reduce((s,x)=>{const p=find(x.id);return s+(p?p.price*x.qty:0)},0)}
+function addToCart(id,qty){const e=cart.find(x=>x.id==id);e?e.qty+=qty:cart.push({id,qty});saveCart();updateFab()}
+function changeQty(id,d){const e=cart.find(x=>x.id==id);if(!e)return;e.qty+=d;if(e.qty<=0)cart=cart.filter(x=>x.id!=id);saveCart();updateFab();renderCart()}
+function removeItem(id){cart=cart.filter(x=>x.id!=id);saveCart();updateFab();renderCart()}
+function updateFab(){const n=cartCount();$('#fab').hidden=n==0;$('#fabCnt').textContent=n;$('#fabTot').textContent=n?rp(cartTotal()):''}
+function openCart(){renderCart();$('#cartDl').showModal()}
+function renderCart(){
+  const rows=cart.map(x=>{const p=find(x.id);if(!p)return'';return `
+    <div class="crow">${p.image?`<img src="${esc(p.image)}">`:'<span class="ph"></span>'}
+      <div><b>${esc(p.name)}</b><span class="mut">${rp(p.price)}</span></div>
+      <div class="qty"><button onclick="changeQty('${esc(x.id)}',-1)">−</button><span>${x.qty}</span><button onclick="changeQty('${esc(x.id)}',1)">+</button></div>
+      <button class="bad" style="border:0;background:none;padding:6px" onclick="removeItem('${esc(x.id)}')">✕</button>
+    </div>`}).join('');
+  const addrHtml=addr?`<div class="addr-sum"><b>${esc(addr.nama)}</b> · ${esc(addr.telp)}<br>${esc(addr.detail)}, ${esc(addr.kec||'')} ${esc(addr.kab||'')}, ${esc(addr.prov||'')} ${esc(addr.pos||'')}</div><button class="ghost" onclick="openAddress()">Ubah alamat</button>`
+    :`<button onclick="openAddress()">+ Tambah Alamat Pengiriman</button>`;
+  $('#cartDl').innerHTML=`<button class="dclose" onclick="cartDl.close()">✕</button>
+    <div class="dtitle">Keranjang</div>
+    <div class="dbody">
+      ${cart.length?rows:'<p class="mut">Keranjang masih kosong.</p>'}
+      ${cart.length?`<div class="subrow"><span>Subtotal</span><span>${rp(cartTotal())}</span></div><p class="note">Harga belum termasuk ongkos kirim. Ongkir akan diinfokan admin setelah alamat dicek.</p>`:''}
+      <h3 style="margin-top:6px">Alamat pengiriman</h3>${addrHtml}
+      ${cart.length?`<button id="ckBtn" style="margin-top:14px;width:100%">Checkout via WhatsApp</button>`:''}
+    </div>`;
+  $('#ckBtn')?.addEventListener('click',()=>startCheckout(cart.slice(),true));
+}
+
+/* ---------- address ---------- */
+const API='https://www.emsifa.com/api-wilayah-indonesia/api';
+async function fillSelect(sel,url,ph){
+  sel.disabled=true;sel.innerHTML=`<option>Memuat…</option>`;
+  try{const r=await fetch(url);if(!r.ok)throw 0;const d=await r.json();
+    sel.innerHTML=`<option value="">${ph}</option>`+d.map(x=>`<option value="${esc(x.id)}" data-name="${esc(x.name)}">${esc(x.name)}</option>`).join('');
+    sel.disabled=false;return true;
+  }catch{sel.innerHTML=`<option value="">Gagal memuat, isi manual di kolom alamat</option>`;sel.disabled=true;return false}
+}
+function openAddress(){
+  $('#addrDl').innerHTML=`<button class="dclose" onclick="addrDl.close()">✕</button>
+    <div class="dtitle">Alamat pengiriman</div>
+    <div class="dbody">
+      <button type="button" id="geoBtn" class="ghost" style="width:100%">📍 Deteksi lokasi saya (otomatis)</button>
+      <p class="mut" id="geoMsg" style="min-height:1.2em"></p>
+      <form class="addr" id="af">
+        <label>Nama penerima<input id="a_nama" required value="${esc(addr?.nama||'')}"></label>
+        <label>No. WhatsApp<input id="a_telp" required inputmode="tel" value="${esc(addr?.telp||'')}"></label>
+        <label>Provinsi<select id="a_prov"><option value="">Pilih provinsi</option></select></label>
+        <div class="two">
+          <label>Kabupaten/Kota<select id="a_kab" disabled><option value="">Pilih provinsi dulu</option></select></label>
+          <label>Kecamatan<select id="a_kec" disabled><option value="">Pilih kota dulu</option></select></label>
+        </div>
+        <label>Alamat lengkap (jalan, no. rumah, RT/RW, patokan)<textarea id="a_detail" rows="3" required>${esc(addr?.detail||'')}</textarea></label>
+        <label>Kode pos (opsional)<input id="a_pos" value="${esc(addr?.pos||'')}"></label>
+        <button type="submit">Simpan alamat</button>
+      </form>
+    </div>`;
+  $('#addrDl').showModal();
+  fillSelect($('#a_prov'),`${API}/provinces.json`,'Pilih provinsi').then(()=>{
+    if(addr?.provId)$('#a_prov').value=addr.provId,$('#a_prov').dispatchEvent(new Event('change'));
+  });
+  $('#a_prov').onchange=async e=>{
+    const id=e.target.value;if(!id){$('#a_kab').innerHTML='<option value="">Pilih provinsi dulu</option>';$('#a_kab').disabled=true;return}
+    await fillSelect($('#a_kab'),`${API}/regencies/${id}.json`,'Pilih kabupaten/kota');
+    if(addr?.kabId)$('#a_kab').value=addr.kabId,$('#a_kab').dispatchEvent(new Event('change'));
+  };
+  $('#a_kab').onchange=async e=>{
+    const id=e.target.value;if(!id){$('#a_kec').innerHTML='<option value="">Pilih kota dulu</option>';$('#a_kec').disabled=true;return}
+    await fillSelect($('#a_kec'),`${API}/districts/${id}.json`,'Pilih kecamatan');
+    if(addr?.kecId)$('#a_kec').value=addr.kecId;
+  };
+  $('#geoBtn').onclick=()=>{
+    if(!navigator.geolocation){$('#geoMsg').textContent='Perangkat/browser tidak mendukung deteksi lokasi.';return}
+    $('#geoMsg').textContent='Mendeteksi lokasi…';
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      try{
+        const {latitude,longitude}=pos.coords;
+        const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+        const d=await r.json();
+        $('#a_detail').value=d.display_name||$('#a_detail').value;
+        if(d.address?.postcode)$('#a_pos').value=d.address.postcode;
+        $('#geoMsg').textContent='Lokasi terisi otomatis. Periksa dan lengkapi bila perlu, lalu pilih Provinsi/Kota/Kecamatan secara manual.';
+      }catch{$('#geoMsg').textContent='Gagal mengambil detail lokasi. Isi alamat secara manual.'}
+    },err=>{$('#geoMsg').textContent='Izin lokasi ditolak atau gagal. Isi alamat secara manual.'});
+  };
+  $('#af').onsubmit=e=>{
+    e.preventDefault();
+    const provSel=$('#a_prov'),kabSel=$('#a_kab'),kecSel=$('#a_kec');
+    addr={
+      nama:$('#a_nama').value.trim(),telp:$('#a_telp').value.trim(),
+      prov:provSel.selectedOptions[0]?.dataset.name||'',provId:provSel.value,
+      kab:kabSel.selectedOptions[0]?.dataset.name||'',kabId:kabSel.value,
+      kec:kecSel.selectedOptions[0]?.dataset.name||'',kecId:kecSel.value,
+      detail:$('#a_detail').value.trim(),pos:$('#a_pos').value.trim()
+    };
+    localStorage.setItem('addr_v1',JSON.stringify(addr));
+    $('#addrDl').close();
+    if(pendingItems){sendWa();}else{toast('Alamat tersimpan');renderCart()}
+  };
+}
+
+/* ---------- checkout ---------- */
+function startCheckout(items,isCart){
+  if(!items.length){toast('Keranjang masih kosong');return}
+  pendingItems=items;pendingIsCart=isCart;
+  if(!addr){openAddress();}else{sendWa();}
+}
+function sendWa(){
+  const items=pendingItems;if(!items){return}
+  const lines=items.map((x,i)=>{const p=find(x.id);return `${i+1}. ${p?p.name:'Produk'} x${x.qty} = ${rp((p?p.price:0)*x.qty)}`});
+  const total=cartTotal(items);
+  const msg=[
+    `Halo, saya mau checkout pesanan dari ${C.storeName}:`,'',
+    ...lines,'',
+    `Total produk: ${rp(total)}`,
+    `(Harga belum termasuk ongkos kirim)`,'',
+    `Detail alamat pengiriman:`,
+    `Nama: ${addr.nama}`,
+    `No. WA: ${addr.telp}`,
+    `Alamat: ${addr.detail}, Kec. ${addr.kec}, ${addr.kab}, ${addr.prov} ${addr.pos}`.replace(/,\s*,/g,',')
+  ].join('\n');
+  let num=(C.checkoutWhatsapp||'').replace(/\D/g,'');if(num.startsWith('0'))num='62'+num.slice(1);
+  window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`,'_blank');
+  if(pendingIsCart){cart=[];saveCart();updateFab()}
+  pendingItems=null;
+  $('#cartDl').close();
+}
+
+updateFab();
+fetch(C.dataPath,{cache:'no-store'}).then(r=>r.json()).then(d=>{P=d.products;draw()}).catch(()=>{$('#g').innerHTML='<p class="mut" style="grid-column:1/-1">Katalog belum bisa dimuat. Muat ulang halaman.</p>'});
 </script></body></html>

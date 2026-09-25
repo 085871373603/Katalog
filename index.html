@@ -1,27 +1,14 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Katalog</title><link rel="stylesheet" href="style.css"></head><body>
 <header><div class="wrap"><h1 id="sn"></h1><input id="q" type="search" placeholder="Cari produk" aria-label="Cari produk" style="max-width:220px"></div></header>
-
-<!-- ===== Banner promosi ===== -->
-<section id="promo" class="promo-wrap" hidden aria-label="Promosi">
-  <div class="wrap">
-    <div class="promo-shell">
-      <div class="promo-viewport" id="promoViewport">
-        <div class="promo-track" id="promoTrack"></div>
-        <button type="button" class="promo-nav prev" id="promoPrev" aria-label="Banner sebelumnya">‹</button>
-        <button type="button" class="promo-nav next" id="promoNext" aria-label="Banner berikutnya">›</button>
-      </div>
-      <div class="promo-dots" id="promoDots" aria-label="Navigasi banner"></div>
-    </div>
-  </div>
-</section>
-
+<div class="banner-wrap" id="bannerWrap" hidden>
+  <div class="banner-track" id="bannerTrack"></div>
+  <div class="banner-dots" id="bannerDots"></div>
+</div>
 <div class="wrap"><div class="chips" id="ch"></div><div class="grid2" id="g"></div></div>
 <footer id="ft"></footer>
 
-<button class="fab" id="fab" hidden onclick="openCart()" aria-label="Buka keranjang">
-  <img src="aset/keranjang.png" alt=""> <span class="cnt" id="fabCnt">0</span> <span id="fabTot"></span>
-</button>
+<button class="fab" id="fab" hidden onclick="openCart()">🛒 <span class="cnt" id="fabCnt">0</span> <span id="fabTot"></span></button>
 
 <dialog id="dl"></dialog>
 <dialog id="cartDl"></dialog>
@@ -31,11 +18,10 @@
 <script src="config.js"></script>
 <script>
 const C=CFG,$=s=>document.querySelector(s);
-let P=[],B=[],cat='';
+let P=[],B=[],cat='',promoFilter=null;
 let cart=JSON.parse(localStorage.getItem('cart_v1')||'[]');   // [{id,qty}]
 let addr=JSON.parse(localStorage.getItem('addr_v1')||'null');
-let pendingItems=null,pendingIsCart=false,curId=null;
-let promoIndex=0,promoTimer=null,promoPauseTimer=null,promoDragging=false,promoDragStartX=0,promoDragStartScroll=0;
+let pendingItems=null, pendingIsCart=false, curId=null;
 
 const rp=n=>'Rp'+Number(n||0).toLocaleString('id-ID');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -43,149 +29,43 @@ const find=id=>P.find(p=>p.id==id);
 document.title=C.storeName;$('#sn').textContent=C.storeName;
 $('#ft').textContent=`© ${new Date().getFullYear()} ${C.storeName}`;
 
-function toast(m){const t=$('#toast2');t.textContent=m;t.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.display='none',2600)}
-
-/* ---------- banner promosi ---------- */
-function getActiveBanners(){
-  return B
-    .filter(b=>b&&b.active&&b.image&&find(b.productId))
-    .sort((a,b)=>(+a.order||9999)-(+b.order||9999));
-}
-
-function drawBanners(){
-  const list=getActiveBanners();
-  const promo=$('#promo');
-  if(!list.length){
-    promo.hidden=true;
-    stopPromoAutoplay();
-    $('#promoTrack').innerHTML='';
-    $('#promoDots').innerHTML='';
-    return;
-  }
-
-  promo.hidden=false;
-  promoIndex=Math.min(promoIndex,list.length-1);
-
-  $('#promoTrack').innerHTML=list.map((b,i)=>{
-    const p=find(b.productId);
-    return `<button type="button" class="promo-slide" data-promo-product="${esc(b.productId)}" aria-label="Lihat ${esc(p.name)}" data-index="${i}">
-      <img src="${esc(b.image)}" alt="${esc(p.name)}" loading="${i===0?'eager':'lazy'}">
-      <span class="promo-caption"><b>${esc(p.name)}</b><small>Lihat produk</small></span>
-    </button>`;
-  }).join('');
-
-  $('#promoDots').innerHTML=list.map((_,i)=>
-    `<button type="button" class="promo-dot ${i===promoIndex?'on':''}" data-promo-index="${i}" aria-label="Banner ${i+1}"></button>`
-  ).join('');
-
-  bindPromoScroll();
-  scrollPromoTo(promoIndex,false);
-  updatePromoControls(list.length);
-  startPromoAutoplay(list.length);
-}
-
-function updatePromoControls(length){
-  $('#promoPrev').hidden=length<=1;
-  $('#promoNext').hidden=length<=1;
-  $('#promoDots').hidden=length<=1;
-}
-
-function bindPromoScroll(){
-  const vp=$('#promoViewport');
-  vp.onscroll=()=>{
-    const width=Math.max(vp.clientWidth,1);
-    const i=Math.round(vp.scrollLeft/width);
-    const list=getActiveBanners();
-    promoIndex=Math.max(0,Math.min(i,list.length-1));
-    document.querySelectorAll('.promo-dot').forEach((el,n)=>el.classList.toggle('on',n===promoIndex));
-  };
-}
-
-function scrollPromoTo(index,smooth=true){
-  const list=getActiveBanners();
-  if(!list.length)return;
-  promoIndex=(index+list.length)%list.length;
-  const vp=$('#promoViewport');
-  vp.scrollTo({left:promoIndex*vp.clientWidth,behavior:smooth?'smooth':'auto'});
-  document.querySelectorAll('.promo-dot').forEach((el,n)=>el.classList.toggle('on',n===promoIndex));
-}
-
-function startPromoAutoplay(length){
-  stopPromoAutoplay();
-  if(length<=1)return;
-  promoTimer=setInterval(()=>{
-    if(document.hidden)return;
-    scrollPromoTo(promoIndex+1,true);
-  },4500);
-}
-
-function stopPromoAutoplay(){
-  if(promoTimer){clearInterval(promoTimer);promoTimer=null}
-}
-
-function pausePromoBriefly(){
-  stopPromoAutoplay();
-  clearTimeout(promoPauseTimer);
-  if(getActiveBanners().length>1){
-    promoPauseTimer=setTimeout(()=>startPromoAutoplay(getActiveBanners().length),5000);
-  }
-}
-
-$('#promoPrev').onclick=()=>{pausePromoBriefly();scrollPromoTo(promoIndex-1)};
-$('#promoNext').onclick=()=>{pausePromoBriefly();scrollPromoTo(promoIndex+1)};
-$('#promoDots').onclick=e=>{
-  const b=e.target.closest('[data-promo-index]');
-  if(!b)return;
-  pausePromoBriefly();
-  scrollPromoTo(+b.dataset.promoIndex);
-};
-
-$('#promoTrack').onclick=e=>{
-  if(promoDragging)return;
-  const slide=e.target.closest('[data-promo-product]');
-  if(!slide)return;
-  openDetail(slide.dataset.promoProduct);
-};
-
-const promoViewport=$('#promoViewport');
-promoViewport.addEventListener('pointerdown',e=>{
-  if(e.pointerType==='mouse')return;
-  promoDragging=false;
-  promoDragStartX=e.clientX;
-  promoDragStartScroll=promoViewport.scrollLeft;
-});
-promoViewport.addEventListener('pointermove',e=>{
-  if(e.pointerType==='mouse')return;
-  if(Math.abs(e.clientX-promoDragStartX)>8)promoDragging=true;
-});
-promoViewport.addEventListener('pointerup',()=>{
-  if(promoDragging)pausePromoBriefly();
-});
-promoViewport.addEventListener('mouseenter',pausePromoBriefly);
-promoViewport.addEventListener('mouseleave',()=>startPromoAutoplay(getActiveBanners().length));
+function toast(m){const t=$('#toast2');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2600)}
 
 /* ---------- grid ---------- */
+function promoLabelFor(p){
+  if(p.bxgy?.buy&&p.bxgy?.free)return `Beli ${p.bxgy.buy} Gratis ${p.bxgy.free}`;
+  return p.promo||'';
+}
+function isHabis(p){return p.status=='habis'||(p.stock??0)<=0}
 function draw(){
   const q=$('#q').value.toLowerCase(),cs=[...new Set(P.map(p=>p.category).filter(Boolean))];
-  $('#ch').innerHTML=cs.length?['',...cs].map(c=>`<button class="${c===cat?'on':''}" data-c="${esc(c)}">${c?esc(c):'Semua'}</button>`).join():'';
-  const L=P.filter(p=>(!cat||p.category===cat)&&p.name.toLowerCase().includes(q));
-  $('#g').innerHTML=L.length?L.map(p=>`
+  $('#ch').innerHTML= promoFilter
+    ? `<button class="on" id="clearPromo">✕ Promo: menampilkan ${promoFilter.ids.length} produk</button>`
+    : (cs.length?['',...cs].map(c=>`<button class="${c===cat?'on':''}" data-c="${esc(c)}">${c?esc(c):'Semua'}</button>`).join(''):'');
+  const base= promoFilter ? P.filter(p=>promoFilter.ids.includes(p.id)) : P.filter(p=>!cat||p.category===cat);
+  const L=base.filter(p=>p.name.toLowerCase().includes(q));
+  $('#g').innerHTML=L.length?L.map(p=>{
+    const habis=isHabis(p),promo=promoLabelFor(p),coret=p.originalPrice>p.price;
+    return `
     <div class="card">
-      <button class="imgb" data-more="${esc(p.id)}">${p.image?`<img loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}">`:'<span class="ph"></span>'}</button>
+      <button class="imgb" data-more="${esc(p.id)}">${p.image?`<img loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}">`:'<span class="ph"></span>'}${promo?`<span class="promo-ribbon">${esc(promo)}</span>`:''}</button>
       <div class="info">
         <b>${esc(p.name)}</b>
+        ${coret?`<span class="strike">${rp(p.originalPrice)}</span>`:''}
         <span class="price">${rp(p.price)}</span>
-        ${p.status=='habis'?'<span class="badge">Stok habis</span>':''}
+        ${habis?'<span class="badge">Stok habis</span>':''}
         <div class="card-actions">
           <button class="b-more" data-more="${esc(p.id)}">Selengkapnya</button>
-          <button class="b-cart" data-add="${esc(p.id)}" ${p.status=='habis'?'disabled':''} aria-label="Tambah ke keranjang">
-            <img src="aset/keranjang.png" alt="">
-          </button>
+          <button class="b-cart" data-add="${esc(p.id)}" ${habis?'disabled':''} aria-label="Tambah ke keranjang"><img src="aset/keranjang.png" alt=""></button>
         </div>
       </div>
-    </div>`).join(''):'<p class="mut" style="grid-column:1/-1">Tidak ada produk yang cocok.</p>';
+    </div>`;
+  }).join(''):'<p class="mut" style="grid-column:1/-1">Tidak ada produk yang cocok.</p>';
 }
-$('#ch').onclick=e=>{if(e.target.dataset.c!==undefined){cat=e.target.dataset.c;draw()}};
+$('#ch').onclick=e=>{
+  if(e.target.id=='clearPromo'){promoFilter=null;draw();return}
+  if(e.target.dataset.c!==undefined){cat=e.target.dataset.c;draw()}
+};
 $('#q').oninput=draw;
 $('#g').onclick=e=>{
   const m=e.target.closest('[data-more]'),a=e.target.closest('[data-add]');
@@ -196,34 +76,43 @@ $('#g').onclick=e=>{
 /* ---------- detail dialog ---------- */
 function openDetail(id){
   curId=id;const p=find(id);if(!p)return;
+  const habis=isHabis(p),promo=promoLabelFor(p),coret=p.originalPrice>p.price;
   $('#dl').innerHTML=`<button class="dclose" onclick="dl.close()">✕</button>
     <div class="det">${p.image?`<img src="${esc(p.image)}" alt="${esc(p.name)}">`:'<span class="ph"></span>'}
     <div>
       <h2>${esc(p.name)}</h2>
       <p class="mut">${esc(p.category||'')}</p>
-      <p><b>${rp(p.price)}</b> ${p.status=='habis'?'<span class="badge">· Stok habis</span>':''}</p>
+      ${promo?`<p><span class="promo-badge">${esc(promo)}</span></p>`:''}
+      <p>${coret?`<span class="strike">${rp(p.originalPrice)}</span> `:''}<b>${rp(p.price)}</b> ${habis?'<span class="badge">· Stok habis</span>':''}</p>
       <p>${esc(p.desc)}</p>
-      <div class="qty"><span>Jumlah</span><button type="button" onclick="stepQty(-1)">−</button><input id="mqty" type="number" min="1" value="1"><button type="button" onclick="stepQty(1)">+</button></div>
-      <button data-cart="${esc(p.id)}" ${p.status=='habis'?'disabled':''}>Tambah ke Keranjang</button>
-      <button class="ghost" data-buy="${esc(p.id)}" ${p.status=='habis'?'disabled':''}>Beli Langsung</button>
+      <div class="qty"><span>Jumlah</span><button type="button" onclick="stepQty(-1)">−</button><input id="mqty" type="number" min="1" max="${p.stock||99}" value="1"><button type="button" onclick="stepQty(1)">+</button></div>
+      <button data-cart="${esc(p.id)}" ${habis?'disabled':''}>Tambah ke Keranjang</button>
+      <button class="ghost" data-buy="${esc(p.id)}" ${habis?'disabled':''}>Beli Langsung</button>
     </div></div>`;
   $('#dl').showModal();
 }
-function stepQty(d){const i=$('#mqty');i.value=Math.max(1,(+i.value||1)+d)}
+function stepQty(d){const i=$('#mqty');const max=+i.max||99;i.value=Math.min(max,Math.max(1,(+i.value||1)+d))}
 $('#dl').onclick=e=>{
   if(e.target.id=='dl')e.target.close();
   const c=e.target.closest('[data-cart]'),b=e.target.closest('[data-buy]');
   const qty=Math.max(1,+$('#mqty')?.value||1);
   if(c){addToCart(c.dataset.cart,qty);toast('Ditambahkan ke keranjang');$('#dl').close()}
-  if(b){$('#dl').close();startCheckout([{id:b.dataset.buy,qty}],false)}
+  if(b){addToCart(b.dataset.buy,qty);$('#dl').close();openCart()}
 };
 
 /* ---------- cart ---------- */
 function saveCart(){localStorage.setItem('cart_v1',JSON.stringify(cart))}
 function cartCount(){return cart.reduce((s,x)=>s+x.qty,0)}
 function cartTotal(items){return (items||cart).reduce((s,x)=>{const p=find(x.id);return s+(p?p.price*x.qty:0)},0)}
-function addToCart(id,qty){const e=cart.find(x=>x.id==id);e?e.qty+=qty:cart.push({id,qty});saveCart();updateFab()}
-function changeQty(id,d){const e=cart.find(x=>x.id==id);if(!e)return;e.qty+=d;if(e.qty<=0)cart=cart.filter(x=>x.id!=id);saveCart();updateFab();renderCart()}
+function addToCart(id,qty){
+  const p=find(id);const max=p?.stock??Infinity;
+  const e=cart.find(x=>x.id==id);
+  const current=e?e.qty:0,wanted=current+qty,applied=Math.min(max,wanted);
+  if(e)e.qty=applied;else if(applied>0)cart.push({id,qty:applied});
+  if(wanted>max)toast(`Stok tersisa ${max}, jumlah di keranjang disesuaikan.`);
+  saveCart();updateFab();
+}
+function changeQty(id,d){const e=cart.find(x=>x.id==id);if(!e)return;const p=find(id);const max=p?.stock??Infinity;e.qty=Math.min(max,e.qty+d);if(e.qty<=0)cart=cart.filter(x=>x.id!=id);saveCart();updateFab();renderCart()}
 function removeItem(id){cart=cart.filter(x=>x.id!=id);saveCart();updateFab();renderCart()}
 function updateFab(){const n=cartCount();$('#fab').hidden=n==0;$('#fabCnt').textContent=n;$('#fabTot').textContent=n?rp(cartTotal()):''}
 function openCart(){renderCart();$('#cartDl').showModal()}
@@ -234,7 +123,7 @@ function renderCart(){
       <div class="qty"><button onclick="changeQty('${esc(x.id)}',-1)">−</button><span>${x.qty}</span><button onclick="changeQty('${esc(x.id)}',1)">+</button></div>
       <button class="bad" style="border:0;background:none;padding:6px" onclick="removeItem('${esc(x.id)}')">✕</button>
     </div>`}).join('');
-  const addrHtml=addr?`<div class="addr-sum"><b>${esc(addr.nama)}</b> · ${esc(addr.telp)}<br>${esc(addr.detail)}, ${esc(addr.kec||'')} ${esc(addr.kab||'')}, ${esc(addr.prov||'')} ${esc(addr.pos||'')}</div><button class="ghost" onclick="openAddress()">Ubah alamat</button>`
+  const addrHtml=addr?`<div class="addr-sum"><b>${esc(addr.nama)}</b> · ${esc(addr.telp)}<br>${esc(addr.detail)}<br>${esc(addr.destLabel||'')} ${esc(addr.pos||'')}</div><button class="ghost" onclick="openAddress()">Ubah alamat</button>`
     :`<button onclick="openAddress()">+ Tambah Alamat Pengiriman</button>`;
   $('#cartDl').innerHTML=`<button class="dclose" onclick="cartDl.close()">✕</button>
     <div class="dtitle">Keranjang</div>
@@ -248,14 +137,6 @@ function renderCart(){
 }
 
 /* ---------- address ---------- */
-const API='https://www.emsifa.com/api-wilayah-indonesia/api';
-async function fillSelect(sel,url,ph){
-  sel.disabled=true;sel.innerHTML=`<option>Memuat…</option>`;
-  try{const r=await fetch(url);if(!r.ok)throw 0;const d=await r.json();
-    sel.innerHTML=`<option value="">${ph}</option>`+d.map(x=>`<option value="${esc(x.id)}" data-name="${esc(x.name)}">${esc(x.name)}</option>`).join('');
-    sel.disabled=false;return true;
-  }catch{sel.innerHTML=`<option value="">Gagal memuat, isi manual di kolom alamat</option>`;sel.disabled=true;return false}
-}
 function openAddress(){
   $('#addrDl').innerHTML=`<button class="dclose" onclick="addrDl.close()">✕</button>
     <div class="dtitle">Alamat pengiriman</div>
@@ -265,29 +146,35 @@ function openAddress(){
       <form class="addr" id="af">
         <label>Nama penerima<input id="a_nama" required value="${esc(addr?.nama||'')}"></label>
         <label>No. WhatsApp<input id="a_telp" required inputmode="tel" value="${esc(addr?.telp||'')}"></label>
-        <label>Provinsi<select id="a_prov"><option value="">Pilih provinsi</option></select></label>
-        <div class="two">
-          <label>Kabupaten/Kota<select id="a_kab" disabled><option value="">Pilih provinsi dulu</option></select></label>
-          <label>Kecamatan<select id="a_kec" disabled><option value="">Pilih kota dulu</option></select></label>
-        </div>
+        <label>Cari wilayah tujuan (untuk hitung ongkir otomatis)<input id="a_search" placeholder="Contoh: nama kelurahan/kecamatan" autocomplete="off"></label>
+        <div id="a_sugg" class="sugg-list"></div>
+        <div id="a_picked" class="addr-sum" ${addr?.destId?'':'hidden'}>${addr?.destId?esc(addr.destLabel):''}</div>
         <label>Alamat lengkap (jalan, no. rumah, RT/RW, patokan)<textarea id="a_detail" rows="3" required>${esc(addr?.detail||'')}</textarea></label>
-        <label>Kode pos (opsional)<input id="a_pos" value="${esc(addr?.pos||'')}"></label>
+        <label>Kode pos<input id="a_pos" value="${esc(addr?.pos||'')}"></label>
         <button type="submit">Simpan alamat</button>
       </form>
     </div>`;
   $('#addrDl').showModal();
-  fillSelect($('#a_prov'),`${API}/provinces.json`,'Pilih provinsi').then(()=>{
-    if(addr?.provId)$('#a_prov').value=addr.provId,$('#a_prov').dispatchEvent(new Event('change'));
-  });
-  $('#a_prov').onchange=async e=>{
-    const id=e.target.value;if(!id){$('#a_kab').innerHTML='<option value="">Pilih provinsi dulu</option>';$('#a_kab').disabled=true;return}
-    await fillSelect($('#a_kab'),`${API}/regencies/${id}.json`,'Pilih kabupaten/kota');
-    if(addr?.kabId)$('#a_kab').value=addr.kabId,$('#a_kab').dispatchEvent(new Event('change'));
-  };
-  $('#a_kab').onchange=async e=>{
-    const id=e.target.value;if(!id){$('#a_kec').innerHTML='<option value="">Pilih kota dulu</option>';$('#a_kec').disabled=true;return}
-    await fillSelect($('#a_kec'),`${API}/districts/${id}.json`,'Pilih kecamatan');
-    if(addr?.kecId)$('#a_kec').value=addr.kecId;
+  let picked=addr?.destId?{id:addr.destId,label:addr.destLabel}:null;
+  let searchDebounce;
+  async function runSearch(q){
+    if(q.length<3){$('#a_sugg').innerHTML='';return}
+    $('#a_sugg').innerHTML='<p class="mut">Mencari…</p>';
+    try{
+      const r=await fetch('/api/ongkir?q='+encodeURIComponent(q));
+      const j=await r.json();
+      if(!r.ok)throw new Error(j.error||'Gagal mencari wilayah');
+      const list=j.data||[];
+      $('#a_sugg').innerHTML=list.length?list.map(d=>`<button type="button" class="sugg-item" data-id="${esc(d.id)}" data-label="${esc(d.label)}" data-pos="${esc(d.zip_code||'')}">${esc(d.label)}</button>`).join(''):'<p class="mut">Tidak ditemukan, coba kata kunci lain.</p>';
+    }catch(err){$('#a_sugg').innerHTML=`<p class="mut">${esc(err.message)}</p>`}
+  }
+  $('#a_search').oninput=e=>{clearTimeout(searchDebounce);const q=e.target.value.trim();searchDebounce=setTimeout(()=>runSearch(q),400)};
+  $('#a_sugg').onclick=e=>{
+    const b=e.target.closest('[data-id]');if(!b)return;
+    picked={id:b.dataset.id,label:b.dataset.label};
+    if(b.dataset.pos)$('#a_pos').value=b.dataset.pos;
+    $('#a_picked').hidden=false;$('#a_picked').textContent=b.dataset.label;
+    $('#a_search').value='';$('#a_sugg').innerHTML='';
   };
   $('#geoBtn').onclick=()=>{
     if(!navigator.geolocation){$('#geoMsg').textContent='Perangkat/browser tidak mendukung deteksi lokasi.';return}
@@ -299,18 +186,18 @@ function openAddress(){
         const d=await r.json();
         $('#a_detail').value=d.display_name||$('#a_detail').value;
         if(d.address?.postcode)$('#a_pos').value=d.address.postcode;
-        $('#geoMsg').textContent='Lokasi terisi otomatis. Periksa dan lengkapi bila perlu, lalu pilih Provinsi/Kota/Kecamatan secara manual.';
+        const guess=d.address?.suburb||d.address?.village||d.address?.city_district||d.address?.town||'';
+        $('#geoMsg').textContent=guess?'Lokasi terisi. Pilih wilayah yang cocok di hasil pencarian di bawah untuk hitung ongkir.':'Lokasi terisi otomatis. Cari dan pilih wilayah tujuan secara manual di bawah.';
+        if(guess){$('#a_search').value=guess;runSearch(guess)}
       }catch{$('#geoMsg').textContent='Gagal mengambil detail lokasi. Isi alamat secara manual.'}
-    },err=>{$('#geoMsg').textContent='Izin lokasi ditolak atau gagal. Isi alamat secara manual.'});
+    },()=>{$('#geoMsg').textContent='Izin lokasi ditolak atau gagal. Isi alamat secara manual.'});
   };
   $('#af').onsubmit=e=>{
     e.preventDefault();
-    const provSel=$('#a_prov'),kabSel=$('#a_kab'),kecSel=$('#a_kec');
+    if(!picked){toast('Pilih wilayah tujuan dari hasil pencarian dulu, supaya ongkir bisa dihitung otomatis.');return}
     addr={
       nama:$('#a_nama').value.trim(),telp:$('#a_telp').value.trim(),
-      prov:provSel.selectedOptions[0]?.dataset.name||'',provId:provSel.value,
-      kab:kabSel.selectedOptions[0]?.dataset.name||'',kabId:kabSel.value,
-      kec:kecSel.selectedOptions[0]?.dataset.name||'',kecId:kecSel.value,
+      destId:picked.id,destLabel:picked.label,
       detail:$('#a_detail').value.trim(),pos:$('#a_pos').value.trim()
     };
     localStorage.setItem('addr_v1',JSON.stringify(addr));
@@ -337,7 +224,7 @@ function sendWa(){
     `Detail alamat pengiriman:`,
     `Nama: ${addr.nama}`,
     `No. WA: ${addr.telp}`,
-    `Alamat: ${addr.detail}, Kec. ${addr.kec}, ${addr.kab}, ${addr.prov} ${addr.pos}`.replace(/,\s*,/g,',')
+    `Alamat: ${addr.detail}, ${addr.destLabel||''} ${addr.pos||''}`
   ].join('\n');
   let num=(C.checkoutWhatsapp||'').replace(/\D/g,'');if(num.startsWith('0'))num='62'+num.slice(1);
   window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`,'_blank');
@@ -346,23 +233,38 @@ function sendWa(){
   $('#cartDl').close();
 }
 
-/* ---------- proteksi gesture aplikasi ---------- */
-document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
-document.addEventListener('touchmove',e=>{
-  if(e.touches.length>1)e.preventDefault();
-},{passive:false});
+/* ---------- banner promosi ---------- */
+let bannerTimer;
+function renderBanners(){
+  const valid=B.filter(b=>b.image&&(b.productIds||[]).some(id=>find(id)));
+  $('#bannerWrap').hidden=valid.length===0;
+  if(!valid.length)return;
+  $('#bannerTrack').innerHTML=valid.map(b=>`<button type="button" class="banner-slide" data-ids="${esc(b.productIds.join(','))}"><img src="${esc(b.image)}" alt="Banner promosi" loading="lazy"></button>`).join('');
+  $('#bannerDots').innerHTML=valid.map((_,i)=>`<span class="dot ${i===0?'on':''}"></span>`).join('');
+  const track=$('#bannerTrack');
+  clearInterval(bannerTimer);
+  if(valid.length>1)bannerTimer=setInterval(()=>{
+    const w=track.clientWidth;
+    const next=(Math.round(track.scrollLeft/w)+1)%valid.length;
+    track.scrollTo({left:next*w,behavior:'smooth'});
+  },4000);
+  track.onscroll=()=>{
+    const w=track.clientWidth||1;
+    const idx=Math.round(track.scrollLeft/w);
+    $('#bannerDots').querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('on',i===idx));
+  };
+  track.onclick=e=>{
+    const slide=e.target.closest('.banner-slide');if(!slide)return;
+    const ids=slide.dataset.ids.split(',').filter(Boolean);
+    cat='';promoFilter={ids};draw();
+    document.querySelector('.wrap').scrollIntoView({behavior:'smooth'});
+  };
+}
 
 updateFab();
-
-fetch(C.dataPath,{cache:'no-store'})
-  .then(r=>r.json())
-  .then(d=>{
-    P=Array.isArray(d.products)?d.products:[];
-    B=Array.isArray(d.banners)?d.banners:[];
-    draw();
-    drawBanners();
-  })
-  .catch(()=>{
-    $('#g').innerHTML='<p class="mut" style="grid-column:1/-1">Katalog belum bisa dimuat. Muat ulang halaman.</p>';
-  });
+Promise.all([
+  fetch(C.dataPath,{cache:'no-store'}).then(r=>r.json()).catch(()=>({products:[]})),
+  fetch(C.bannerDataPath,{cache:'no-store'}).then(r=>r.json()).catch(()=>({banners:[]}))
+]).then(([pd,bd])=>{P=pd.products||[];B=bd.banners||[];draw();renderBanners()})
+  .catch(()=>{$('#g').innerHTML='<p class="mut" style="grid-column:1/-1">Katalog belum bisa dimuat. Muat ulang halaman.</p>'});
 </script></body></html>

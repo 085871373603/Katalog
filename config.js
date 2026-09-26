@@ -4,7 +4,7 @@ window.CFG = {
   branch: "main",
   dataPath: "products.json",
   imageDir: "uploads",
-  storeName: "Katalog Saya",
+  storeName: "Toko xyz",
   checkoutWhatsapp: "085871373603",  // nomor WA tujuan checkout
   bannerDataPath: "banners.json",
   bannerImageDir: "uploads/banners",

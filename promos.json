@@ -2,12 +2,14 @@
   "promos": [
     {
       "id": "muhxp8l4",
-      "type": "bxgy_self",
+      "type": "bundle",
       "active": true,
-      "updated": "2026-09-26T05:13:30.040Z",
-      "productId": "mugzfnf5",
-      "buy": 1,
-      "free": 1
+      "updated": "2026-09-26T05:15:12.628Z",
+      "a": "mugzfnf5",
+      "aQty": 1,
+      "b": "mugbmeb6",
+      "bQty": 1,
+      "discount": 7100
     }
   ]
 }

@@ -19,6 +19,7 @@
       <div class="admin-bar-actions">
         <a href="index.html" target="_blank" class="btn ghost sm">Lihat halaman publik</a>
         <button id="addBtn" type="button" class="btn amber sm">＋ Produk</button>
+        <button id="addPromoBtn" type="button" class="btn amber sm">＋ Promo</button>
         <button id="addBannerBtn" type="button" class="btn amber sm">＋ Banner</button>
         <button id="out" type="button" class="btn red sm icon-btn" aria-label="Keluar" title="Keluar">
           <img src="aset/logot1.png" alt="Keluar">
@@ -42,6 +43,20 @@
       </div>
       <p class="mut" id="empty" hidden>Belum ada produk. Klik ＋ Produk untuk menambahkan yang pertama.</p>
       <p class="mut" style="margin-top:12px">Perubahan tampil di halaman publik setelah deploy selesai (sekitar 30 detik).</p>
+    </section>
+
+    <!-- Panel promo pintar -->
+    <section class="panel" style="margin-top:20px">
+      <h2>Promo pintar <span class="mut" id="prcnt"></span></h2>
+      <div class="tbl-wrap">
+        <table class="plist">
+          <thead>
+            <tr><th>Jenis</th><th>Syarat &amp; Ketentuan</th><th>Aksi</th></tr>
+          </thead>
+          <tbody id="prtbody"></tbody>
+        </table>
+      </div>
+      <p class="mut" id="prempty" hidden>Belum ada promo. Klik ＋ Promo untuk membuat aturan pertama.</p>
     </section>
 
     <!-- Panel banner promosi -->
@@ -75,12 +90,6 @@
         <label>Harga coret (opsional)<input id="op" type="number" min="0" placeholder="Kosongkan jika tidak ada"></label>
       </div>
       <label>Stok<input id="stk" type="number" min="0" required placeholder="0 berarti habis"></label>
-      <label>Label promo (opsional) <span class="mut">— contoh: Beli 2 Gratis 1, Beli A Gratis B</span><input id="promo" maxlength="60"></label>
-      <div class="two">
-        <label>Beli (qty) <span class="mut">promo otomatis, opsional</span><input id="bxgy_buy" type="number" min="0" placeholder="Contoh: 2"></label>
-        <label>Gratis (qty)<input id="bxgy_free" type="number" min="0" placeholder="Contoh: 1"></label>
-      </div>
-      <p class="mut" style="margin-top:-6px">Isi "Beli" &amp; "Gratis" hanya untuk promo beli-produk-ini-sendiri (mis. beli 2 gratis 1). Untuk promo lintas produk (beli A gratis B), cukup pakai Label promo saja — totalnya tetap disesuaikan manual saat konfirmasi WhatsApp.</p>
       <label>Deskripsi<textarea id="d" rows="4" maxlength="600"></textarea></label>
       <label>Gambar<input id="i" type="file" accept="image/*"></label>
       <img id="pv" alt="Pratinjau gambar" hidden>
@@ -105,6 +114,59 @@
       <div class="form-actions">
         <button id="b_sv" type="submit" class="btn green">Simpan banner</button>
         <button type="button" id="b_cx" class="btn ghost">Batal</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- ===== Popup tambah/edit promo pintar ===== -->
+<dialog id="promoDl">
+  <button type="button" class="dclose" id="prclose">✕</button>
+  <div class="dtitle" id="prft">Tambah promo</div>
+  <div class="dbody">
+    <form id="prf">
+      <label>Jenis promo
+        <select id="pr_type">
+          <option value="bxgy_self">Beli X Gratis produk yang sama (mis. Beli 2 Gratis 1)</option>
+          <option value="bxgy_cross">Beli produk A Gratis produk B</option>
+          <option value="bundle">Beli A + B, potongan harga sekian</option>
+        </select>
+      </label>
+
+      <!-- Jenis: bxgy_self -->
+      <div id="pr_box_bxgy_self" class="promo-box">
+        <label>Produk<select id="pr1_product"></select></label>
+        <div class="two">
+          <label>Beli (qty)<input id="pr1_buy" type="number" min="1" placeholder="Contoh: 2"></label>
+          <label>Gratis (qty)<input id="pr1_free" type="number" min="1" placeholder="Contoh: 1"></label>
+        </div>
+        <p class="mut">Contoh: Beli 2 = bayar 2, dapat tambahan 1 gratis (total bawa pulang 3).</p>
+      </div>
+
+      <!-- Jenis: bxgy_cross -->
+      <div id="pr_box_bxgy_cross" class="promo-box">
+        <label>Produk A (yang dibeli)<select id="pr2_a"></select></label>
+        <label>Jumlah beli produk A<input id="pr2_aqty" type="number" min="1" placeholder="Contoh: 1"></label>
+        <label>Produk B (yang digratiskan)<select id="pr2_b"></select></label>
+        <label>Jumlah gratis produk B<input id="pr2_bqty" type="number" min="1" placeholder="Contoh: 1"></label>
+        <p class="mut">Contoh: Beli 1 produk A, dapat 1 produk B gratis (otomatis muncul sebagai bonus di keranjang, tanpa perlu menambahkan produk B sendiri).</p>
+      </div>
+
+      <!-- Jenis: bundle -->
+      <div id="pr_box_bundle" class="promo-box">
+        <label>Produk A<select id="pr3_a"></select></label>
+        <label>Jumlah produk A<input id="pr3_aqty" type="number" min="1" placeholder="Contoh: 1"></label>
+        <label>Produk B<select id="pr3_b"></select></label>
+        <label>Jumlah produk B<input id="pr3_bqty" type="number" min="1" placeholder="Contoh: 1"></label>
+        <label>Potongan harga (Rp)<input id="pr3_disc" type="number" min="0" placeholder="Contoh: 5000"></label>
+        <p class="mut">Contoh: Beli 1 produk A dan 1 produk B bersamaan, total dipotong Rp sekian.</p>
+      </div>
+
+      <label>Aktifkan promo ini <input type="checkbox" id="pr_active" checked style="width:auto;margin-left:6px"></label>
+
+      <div class="form-actions">
+        <button id="pr_sv" type="submit" class="btn green">Simpan promo</button>
+        <button type="button" id="pr_cx" class="btn ghost">Batal</button>
       </div>
     </form>
   </div>

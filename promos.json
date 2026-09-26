@@ -1,3 +1,15 @@
 {
-  "promos": []
+  "promos": [
+    {
+      "id": "muip136t",
+      "type": "bundle",
+      "active": true,
+      "updated": "2026-09-26T17:58:32.549Z",
+      "a": "muim0tsp",
+      "aQty": 1,
+      "b": "mugzfnf5",
+      "bQty": 1,
+      "discount": 5500
+    }
+  ]
 }

@@ -88,6 +88,9 @@ dialog::backdrop{background:#000a}
 .note{font-size:.82rem;color:var(--mut);padding-bottom:10px}
 .addr-sum{border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:.9rem;margin:10px 0;background:#faf9f7}
 #cartDl #ckBtn{background:var(--green-dark);border-color:var(--green-dark)}
+.promo-applied{display:grid;gap:4px;margin:4px 0}
+.promo-line{font-size:.85rem;font-weight:700;color:var(--green-dark);background:#eef8f0;border-radius:6px;padding:6px 10px}
+.promo-line.promo-suggest{color:#8a5a00;background:#fff6e0}
 
 /* address form */
 form.addr{display:grid;gap:10px;margin-top:10px}
@@ -125,8 +128,9 @@ body{overflow-x:hidden}
 .banner-wrap{position:relative;background:#f3f3f0}
 .banner-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .banner-track::-webkit-scrollbar{display:none}
-.banner-slide{flex:0 0 100%;scroll-snap-align:start;padding:0;border:0;background:none;cursor:pointer;display:block}
+.banner-slide{flex:0 0 100%;scroll-snap-align:start;padding:0;border:0;background:none;cursor:pointer;display:block;position:relative}
 .banner-slide img{width:100%;aspect-ratio:3/1;object-fit:cover;display:block}
+.banner-caption{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,#000b);color:#fff;font-weight:800;font-size:.82rem;padding:22px 14px 10px;text-align:left}
 .banner-dots{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px}
 .banner-dots .dot{width:6px;height:6px;border-radius:50%;background:#ffffff88}
 .banner-dots .dot.on{background:#fff}
@@ -152,6 +156,8 @@ a.btn{display:inline-block;text-decoration:none;text-align:center}
 .check-item{display:flex;gap:8px;align-items:center;font-weight:500;font-size:.9rem}
 .check-item input{width:auto}
 #b_pv{width:100%;max-width:260px;border-radius:6px}
+.promo-box{display:none;gap:10px;border:1px dashed var(--line);border-radius:8px;padding:12px;margin-top:4px}
+.promo-box.on{display:grid}
 
 /* product table */
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:8px;min-width:0}

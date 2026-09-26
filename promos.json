@@ -1,3 +1,14 @@
 {
-  "promos": []
+  "promos": [
+    {
+      "id": "mui8uc3b",
+      "type": "bxgy_cross",
+      "active": true,
+      "updated": "2026-09-26T10:25:23.640Z",
+      "a": "mugd8xsd",
+      "aQty": 1,
+      "b": "mugzfnf5",
+      "bQty": 1
+    }
+  ]
 }

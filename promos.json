@@ -1,1 +1,13 @@
-{"promos":[]}
+{
+  "promos": [
+    {
+      "id": "muhxp8l4",
+      "type": "bxgy_self",
+      "active": true,
+      "updated": "2026-09-26T05:13:30.040Z",
+      "productId": "mugzfnf5",
+      "buy": 1,
+      "free": 1
+    }
+  ]
+}

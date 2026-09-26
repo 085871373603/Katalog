@@ -7,5 +7,6 @@ window.CFG = {
   storeName: "Katalog Saya",
   checkoutWhatsapp: "085871373603",  // nomor WA tujuan checkout
   bannerDataPath: "banners.json",
-  bannerImageDir: "uploads/banners"
+  bannerImageDir: "uploads/banners",
+  promoDataPath: "promos.json"
 };

@@ -13,12 +13,14 @@
 <dialog id="dl"></dialog>
 <dialog id="cartDl"></dialog>
 <dialog id="addrDl"></dialog>
+<dialog id="congratsDl"></dialog>
 <div id="toast2" role="status"></div>
 
 <script src="config.js"></script>
 <script>
 const C=CFG,$=s=>document.querySelector(s);
-let P=[],B=[],cat='',promoFilter=null;
+let P=[],B=[],PR=[],cat='',promoFilter=null;
+let appliedPromoIds=new Set();
 let cart=JSON.parse(localStorage.getItem('cart_v1')||'[]');   // [{id,qty}]
 let addr=JSON.parse(localStorage.getItem('addr_v1')||'null');
 let pendingItems=null, pendingIsCart=false, curId=null;
@@ -31,11 +33,96 @@ $('#ft').textContent=`© ${new Date().getFullYear()} ${C.storeName}`;
 
 function toast(m){const t=$('#toast2');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2600)}
 
-/* ---------- grid ---------- */
-function promoLabelFor(p){
-  if(p.bxgy?.buy&&p.bxgy?.free)return `Beli ${p.bxgy.buy} Gratis ${p.bxgy.free}`;
-  return p.promo||'';
+/* ---------- promo pintar ---------- */
+function promoLabel(pr){
+  const name=id=>find(id)?.name||'?';
+  if(pr.type==='bxgy_self')return `Beli ${pr.buy} ${name(pr.productId)} Gratis ${pr.free}`;
+  if(pr.type==='bxgy_cross')return `Beli ${pr.aQty} ${name(pr.a)} Gratis ${pr.bQty} ${name(pr.b)}`;
+  if(pr.type==='bundle')return `Beli ${pr.aQty} ${name(pr.a)} + ${pr.bQty} ${name(pr.b)} Hemat ${rp(pr.discount)}`;
+  return '';
 }
+function promosForProduct(id){return PR.filter(pr=>pr.active!==false&&(pr.productId==id||pr.a==id||pr.b==id))}
+function qtyOf(items,id){return items.find(x=>x.id==id)?.qty||0}
+
+/* Hitung diskon & bonus gratis dari SEMUA promo aktif untuk isi keranjang saat ini — satu-satunya sumber
+   perhitungan, dipakai baik untuk tampilan keranjang maupun pesan WhatsApp, supaya angkanya selalu sama. */
+function evaluateCart(items){
+  let discount=0;const freebies=[],applied=[];
+  for(const pr of PR){
+    if(pr.active===false)continue;
+    if(pr.type==='bxgy_self'){
+      const groupSize=pr.buy+pr.free;if(groupSize<=0)continue;
+      const q=qtyOf(items,pr.productId);const groups=Math.floor(q/groupSize);
+      if(groups>0){
+        const p=find(pr.productId);const amt=groups*pr.free*(p?.price||0);
+        discount+=amt;applied.push({id:pr.id,text:`${promoLabel(pr)} — hemat ${rp(amt)}`});
+      }
+    }else if(pr.type==='bxgy_cross'){
+      const qa=qtyOf(items,pr.a);
+      if(qa>=pr.aQty){
+        const sets=Math.floor(qa/pr.aQty),freeQty=sets*pr.bQty,pb=find(pr.b);
+        const amt=freeQty*(pb?.price||0);
+        discount+=amt;freebies.push({id:pr.b,name:pb?.name||'?',qty:freeQty});
+        applied.push({id:pr.id,text:`${promoLabel(pr)} — hemat ${rp(amt)}`});
+      }
+    }else if(pr.type==='bundle'){
+      const qa=qtyOf(items,pr.a),qb=qtyOf(items,pr.b);
+      const sets=Math.min(Math.floor(qa/pr.aQty),Math.floor(qb/pr.bQty));
+      if(sets>0){
+        const amt=sets*pr.discount;
+        discount+=amt;applied.push({id:pr.id,text:`${promoLabel(pr)} x${sets} — hemat ${rp(amt)}`});
+      }
+    }
+  }
+  return {discount,freebies,applied};
+}
+/* Cari promo yang HAMPIR terpenuhi, untuk saran ke pembeli (mis. "tambah 1 lagi untuk gratis") */
+function nearMissText(items){
+  for(const pr of PR){
+    if(pr.active===false)continue;
+    if(pr.type==='bxgy_self'){
+      const p=find(pr.productId);if(!p)continue;
+      const groupSize=pr.buy+pr.free,q=qtyOf(items,pr.productId);
+      if(q>0&&q%groupSize!==0&&q<groupSize*50){const need=groupSize-(q%groupSize);if(need>0&&need<=groupSize-1)return `Tambah ${need} ${p.name} lagi untuk dapat gratis ${pr.free}!`}
+    }else if(pr.type==='bxgy_cross'){
+      const pa=find(pr.a),pb=find(pr.b);if(!pa||!pb)continue;
+      const qa=qtyOf(items,pr.a);
+      if(qa>0&&qa<pr.aQty)return `Tambah ${pr.aQty-qa} ${pa.name} lagi, dapat gratis ${pr.bQty} ${pb.name}!`;
+    }else if(pr.type==='bundle'){
+      const pa=find(pr.a),pb=find(pr.b);if(!pa||!pb)continue;
+      const qa=qtyOf(items,pr.a),qb=qtyOf(items,pr.b);
+      if(qa>=pr.aQty&&qb<pr.bQty)return `Tambah ${pr.bQty-qb} ${pb.name} lagi, dapat potongan ${rp(pr.discount)}!`;
+      if(qb>=pr.bQty&&qa<pr.aQty)return `Tambah ${pr.aQty-qa} ${pa.name} lagi, dapat potongan ${rp(pr.discount)}!`;
+    }
+  }
+  return null;
+}
+function showCongrats(text){
+  $('#congratsDl').innerHTML=`<button class="dclose" onclick="congratsDl.close()">✕</button>
+    <div class="dbody" style="text-align:center;padding-top:30px">
+      <div style="font-size:2.6rem;line-height:1">🎉</div>
+      <h2 style="margin:12px 0 6px">Selamat!</h2>
+      <p>${text}</p>
+      <button style="margin-top:16px" onclick="congratsDl.close()">Asyik, lanjut belanja</button>
+    </div>`;
+  $('#congratsDl').showModal();
+}
+/* Dipanggil tiap isi keranjang berubah: munculkan popup selamat kalau promo baru saja terpenuhi,
+   atau saran kalau pembeli hampir memenuhi syarat promo. */
+function checkPromoFeedback(){
+  const res=evaluateCart(cart);
+  const newIds=new Set(res.applied.map(a=>a.id));
+  const newlySatisfied=res.applied.filter(a=>!appliedPromoIds.has(a.id));
+  appliedPromoIds=newIds;
+  if(newlySatisfied.length){
+    showCongrats(newlySatisfied.map(a=>esc(a.text.split(' — ')[0])).join('<br>'));
+  }else{
+    const nm=nearMissText(cart);
+    if(nm)toast(nm);
+  }
+}
+
+/* ---------- grid ---------- */
 function isHabis(p){return p.status=='habis'||(p.stock??0)<=0}
 function draw(){
   const q=$('#q').value.toLowerCase(),cs=[...new Set(P.map(p=>p.category).filter(Boolean))];
@@ -45,7 +132,7 @@ function draw(){
   const base= promoFilter ? P.filter(p=>promoFilter.ids.includes(p.id)) : P.filter(p=>!cat||p.category===cat);
   const L=base.filter(p=>p.name.toLowerCase().includes(q));
   $('#g').innerHTML=L.length?L.map(p=>{
-    const habis=isHabis(p),promo=promoLabelFor(p),coret=p.originalPrice>p.price;
+    const habis=isHabis(p),prs=promosForProduct(p.id),promo=prs.length?promoLabel(prs[0]):'',coret=p.originalPrice>p.price;
     return `
     <div class="card">
       <button class="imgb" data-more="${esc(p.id)}">${p.image?`<img loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}">`:'<span class="ph"></span>'}${promo?`<span class="promo-ribbon">${esc(promo)}</span>`:''}</button>
@@ -76,13 +163,13 @@ $('#g').onclick=e=>{
 /* ---------- detail dialog ---------- */
 function openDetail(id){
   curId=id;const p=find(id);if(!p)return;
-  const habis=isHabis(p),promo=promoLabelFor(p),coret=p.originalPrice>p.price;
+  const habis=isHabis(p),prs=promosForProduct(p.id),coret=p.originalPrice>p.price;
   $('#dl').innerHTML=`<button class="dclose" onclick="dl.close()">✕</button>
     <div class="det">${p.image?`<img src="${esc(p.image)}" alt="${esc(p.name)}">`:'<span class="ph"></span>'}
     <div>
       <h2>${esc(p.name)}</h2>
       <p class="mut">${esc(p.category||'')}</p>
-      ${promo?`<p><span class="promo-badge">${esc(promo)}</span></p>`:''}
+      ${prs.length?`<div>${prs.map(pr=>`<span class="promo-badge">${esc(promoLabel(pr))}</span>`).join(' ')}</div>`:''}
       <p>${coret?`<span class="strike">${rp(p.originalPrice)}</span> `:''}<b>${rp(p.price)}</b> ${habis?'<span class="badge">· Stok habis</span>':''}</p>
       <p>${esc(p.desc)}</p>
       <div class="qty"><span>Jumlah</span><button type="button" onclick="stepQty(-1)">−</button><input id="mqty" type="number" min="1" max="${p.stock||99}" value="1"><button type="button" onclick="stepQty(1)">+</button></div>
@@ -110,11 +197,11 @@ function addToCart(id,qty){
   const current=e?e.qty:0,wanted=current+qty,applied=Math.min(max,wanted);
   if(e)e.qty=applied;else if(applied>0)cart.push({id,qty:applied});
   if(wanted>max)toast(`Stok tersisa ${max}, jumlah di keranjang disesuaikan.`);
-  saveCart();updateFab();
+  saveCart();updateFab();checkPromoFeedback();
 }
-function changeQty(id,d){const e=cart.find(x=>x.id==id);if(!e)return;const p=find(id);const max=p?.stock??Infinity;e.qty=Math.min(max,e.qty+d);if(e.qty<=0)cart=cart.filter(x=>x.id!=id);saveCart();updateFab();renderCart()}
-function removeItem(id){cart=cart.filter(x=>x.id!=id);saveCart();updateFab();renderCart()}
-function updateFab(){const n=cartCount();$('#fab').hidden=n==0;$('#fabCnt').textContent=n;$('#fabTot').textContent=n?rp(cartTotal()):''}
+function changeQty(id,d){const e=cart.find(x=>x.id==id);if(!e)return;const p=find(id);const max=p?.stock??Infinity;e.qty=Math.min(max,e.qty+d);if(e.qty<=0)cart=cart.filter(x=>x.id!=id);saveCart();updateFab();renderCart();checkPromoFeedback()}
+function removeItem(id){cart=cart.filter(x=>x.id!=id);saveCart();updateFab();renderCart();checkPromoFeedback()}
+function updateFab(){const n=cartCount();$('#fab').hidden=n==0;$('#fabCnt').textContent=n;const t=Math.max(0,cartTotal()-evaluateCart(cart).discount);$('#fabTot').textContent=n?rp(t):''}
 function openCart(){renderCart();$('#cartDl').showModal()}
 function renderCart(){
   const rows=cart.map(x=>{const p=find(x.id);if(!p)return'';return `
@@ -125,11 +212,18 @@ function renderCart(){
     </div>`}).join('');
   const addrHtml=addr?`<div class="addr-sum"><b>${esc(addr.nama)}</b> · ${esc(addr.telp)}<br>${esc(addr.detail)}<br>${esc(addr.destLabel||'')} ${esc(addr.pos||'')}</div><button class="ghost" onclick="openAddress()">Ubah alamat</button>`
     :`<button onclick="openAddress()">+ Tambah Alamat Pengiriman</button>`;
+  const ev=evaluateCart(cart),subtotal=cartTotal(),grand=Math.max(0,subtotal-ev.discount);
+  const nm=cart.length?nearMissText(cart):null;
   $('#cartDl').innerHTML=`<button class="dclose" onclick="cartDl.close()">✕</button>
     <div class="dtitle">Keranjang</div>
     <div class="dbody">
       ${cart.length?rows:'<p class="mut">Keranjang masih kosong.</p>'}
-      ${cart.length?`<div class="subrow"><span>Subtotal</span><span>${rp(cartTotal())}</span></div><p class="note">Harga belum termasuk ongkos kirim. Ongkir akan diinfokan admin setelah alamat dicek.</p>`:''}
+      ${cart.length?`<div class="subrow"><span>Subtotal</span><span>${rp(subtotal)}</span></div>`:''}
+      ${ev.applied.length?`<div class="promo-applied">${ev.applied.map(a=>`<div class="promo-line">🏷️ ${esc(a.text)}</div>`).join('')}</div>`:''}
+      ${ev.freebies.length?`<div class="promo-line">🎁 Bonus gratis: ${ev.freebies.map(f=>`${f.qty}x ${esc(f.name)}`).join(', ')}</div>`:''}
+      ${nm?`<div class="promo-line promo-suggest">💡 ${esc(nm)}</div>`:''}
+      ${ev.discount>0?`<div class="subrow" style="color:var(--green-dark)"><span>Potongan promo</span><span>-${rp(ev.discount)}</span></div>`:''}
+      ${cart.length?`<div class="subrow" style="color:var(--red)"><span>Total</span><span>${rp(grand)}</span></div><p class="note">Harga belum termasuk ongkos kirim. Ongkir akan diinfokan admin setelah alamat dicek.</p>`:''}
       <h3 style="margin-top:6px">Alamat pengiriman</h3>${addrHtml}
       ${cart.length?`<button id="ckBtn" style="margin-top:14px;width:100%">Checkout via WhatsApp</button>`:''}
     </div>`;
@@ -215,20 +309,23 @@ function startCheckout(items,isCart){
 function sendWa(){
   const items=pendingItems;if(!items){return}
   const lines=items.map((x,i)=>{const p=find(x.id);return `${i+1}. ${p?p.name:'Produk'} x${x.qty} = ${rp((p?p.price:0)*x.qty)}`});
-  const total=cartTotal(items);
+  const ev=evaluateCart(items),subtotal=cartTotal(items),grand=Math.max(0,subtotal-ev.discount);
   const msg=[
     `Halo, saya mau checkout pesanan dari ${C.storeName}:`,'',
     ...lines,'',
-    `Total produk: ${rp(total)}`,
+    `Subtotal: ${rp(subtotal)}`,
+    ...ev.applied.map(a=>`Promo: ${a.text}`),
+    ev.freebies.length?`Bonus gratis: ${ev.freebies.map(f=>`${f.qty}x ${f.name}`).join(', ')}`:'',
+    `Total${ev.discount>0?' setelah promo':''}: ${rp(grand)}`,
     `(Harga belum termasuk ongkos kirim)`,'',
     `Detail alamat pengiriman:`,
     `Nama: ${addr.nama}`,
     `No. WA: ${addr.telp}`,
     `Alamat: ${addr.detail}, ${addr.destLabel||''} ${addr.pos||''}`
-  ].join('\n');
+  ].filter(Boolean).join('\n');
   let num=(C.checkoutWhatsapp||'').replace(/\D/g,'');if(num.startsWith('0'))num='62'+num.slice(1);
   window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`,'_blank');
-  if(pendingIsCart){cart=[];saveCart();updateFab()}
+  if(pendingIsCart){cart=[];appliedPromoIds=new Set();saveCart();updateFab()}
   pendingItems=null;
   $('#cartDl').close();
 }
@@ -239,7 +336,14 @@ function renderBanners(){
   const valid=B.filter(b=>b.image&&(b.productIds||[]).some(id=>find(id)));
   $('#bannerWrap').hidden=valid.length===0;
   if(!valid.length)return;
-  $('#bannerTrack').innerHTML=valid.map(b=>`<button type="button" class="banner-slide" data-ids="${esc(b.productIds.join(','))}"><img src="${esc(b.image)}" alt="Banner promosi" loading="lazy"></button>`).join('');
+  $('#bannerTrack').innerHTML=valid.map(b=>{
+    const prs=[...new Map((b.productIds||[]).flatMap(id=>promosForProduct(id)).map(pr=>[pr.id,pr])).values()];
+    const caption=prs.length?prs.map(promoLabel).join(' · '):'';
+    return `<button type="button" class="banner-slide" data-ids="${esc(b.productIds.join(','))}">
+      <img src="${esc(b.image)}" alt="Banner promosi" loading="lazy">
+      ${caption?`<span class="banner-caption">${esc(caption)}</span>`:''}
+    </button>`;
+  }).join('');
   $('#bannerDots').innerHTML=valid.map((_,i)=>`<span class="dot ${i===0?'on':''}"></span>`).join('');
   const track=$('#bannerTrack');
   clearInterval(bannerTimer);
@@ -264,7 +368,8 @@ function renderBanners(){
 updateFab();
 Promise.all([
   fetch(C.dataPath,{cache:'no-store'}).then(r=>r.json()).catch(()=>({products:[]})),
-  fetch(C.bannerDataPath,{cache:'no-store'}).then(r=>r.json()).catch(()=>({banners:[]}))
-]).then(([pd,bd])=>{P=pd.products||[];B=bd.banners||[];draw();renderBanners()})
+  fetch(C.bannerDataPath,{cache:'no-store'}).then(r=>r.json()).catch(()=>({banners:[]})),
+  fetch(C.promoDataPath,{cache:'no-store'}).then(r=>r.json()).catch(()=>({promos:[]}))
+]).then(([pd,bd,prd])=>{P=pd.products||[];B=bd.banners||[];PR=prd.promos||[];draw();renderBanners();appliedPromoIds=new Set(evaluateCart(cart).applied.map(a=>a.id))})
   .catch(()=>{$('#g').innerHTML='<p class="mut" style="grid-column:1/-1">Katalog belum bisa dimuat. Muat ulang halaman.</p>'});
 </script></body></html>

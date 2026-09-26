@@ -9,7 +9,8 @@
    6. Render tabel produk
    7. Form tambah/edit produk
    8. Banner promosi (render, form, simpan, hapus)
-   9. Init
+   9. Promo pintar (render, form dinamis, simpan, hapus)
+   10. Init
    ============================================================ */
 
 const C = CFG;
@@ -102,7 +103,7 @@ async function mutateJsonFile(path, defaultData, mutateFn, commitMessage) {
 }
 
 /* ---------- 3. State ---------- */
-const state = { token: localStorage.getItem('gh_tok') || '', products: [], banners: [], editingId: null, editingBannerId: null };
+const state = { token: localStorage.getItem('gh_tok') || '', products: [], banners: [], promos: [], editingId: null, editingBannerId: null, editingPromoId: null };
 
 async function mutateProducts(mutateFn, commitMessage) {
   const data = await mutateJsonFile(C.dataPath, { products: [] }, mutateFn, commitMessage);
@@ -113,6 +114,12 @@ async function mutateBanners(mutateFn, commitMessage) {
   const data = await mutateJsonFile(C.bannerDataPath, { banners: [] }, mutateFn, commitMessage);
   state.banners = data.banners;
   renderBannerTable();
+}
+async function mutatePromos(mutateFn, commitMessage) {
+  const data = await mutateJsonFile(C.promoDataPath, { promos: [] }, mutateFn, commitMessage);
+  state.promos = data.promos;
+  renderTable();       // produk menampilkan label promo, jadi ikut disegarkan
+  renderPromoTable();
 }
 
 /* ---------- 4. Login / cek izin token ---------- */
@@ -153,8 +160,11 @@ async function login() {
   catch (e) { toast(e.message, true); }
   try { state.banners = (await ghGetFile(C.bannerDataPath)).json?.banners || []; }
   catch (e) { toast(e.message, true); }
+  try { state.promos = (await ghGetFile(C.promoDataPath)).json?.promos || []; }
+  catch (e) { toast(e.message, true); }
   renderTable();
   renderBannerTable();
+  renderPromoTable();
   return true;
 }
 
@@ -174,9 +184,15 @@ async function deleteProduct(product) {
 }
 
 /* ---------- 6. Render tabel produk ---------- */
-function promoLabelFor(p) {
-  if (p.bxgy?.buy && p.bxgy?.free) return `Beli ${p.bxgy.buy} Gratis ${p.bxgy.free}`;
-  return p.promo || '';
+function promoLabel(pr) {
+  const name = id => state.products.find(p => p.id == id)?.name || '?';
+  if (pr.type === 'bxgy_self') return `Beli ${pr.buy} ${name(pr.productId)} Gratis ${pr.free}`;
+  if (pr.type === 'bxgy_cross') return `Beli ${pr.aQty} ${name(pr.a)} Gratis ${pr.bQty} ${name(pr.b)}`;
+  if (pr.type === 'bundle') return `Beli ${pr.aQty} ${name(pr.a)} + ${pr.bQty} ${name(pr.b)} Hemat ${rupiah(pr.discount)}`;
+  return '';
+}
+function promosForProduct(id) {
+  return state.promos.filter(pr => pr.active !== false && (pr.productId == id || pr.a == id || pr.b == id));
 }
 function renderTable() {
   const list = state.products;
@@ -187,14 +203,14 @@ function renderTable() {
 
   $('#tbody').innerHTML = list.map(p => {
     const habis = (p.stock ?? 0) <= 0;
-    const promo = promoLabelFor(p);
+    const promos = promosForProduct(p.id).map(promoLabel);
     return `
     <tr>
       <td class="thumb">${p.image ? `<img src="${esc(p.image)}" alt="">` : '<span class="ph"></span>'}</td>
       <td class="name"><b>${esc(p.name)}</b><span>${esc(p.category || 'Tanpa kategori')}</span></td>
       <td>${p.originalPrice > p.price ? `<span class="strike">${rupiah(p.originalPrice)}</span><br>` : ''}${rupiah(p.price)}</td>
       <td>${p.stock ?? 0}</td>
-      <td>${promo ? esc(promo) : '<span class="mut">—</span>'}</td>
+      <td>${promos.length ? esc(promos.join(' · ')) : '<span class="mut">—</span>'}</td>
       <td><span class="${habis ? 'status-out' : 'status-ok'}">${habis ? 'habis' : 'tersedia'}</span></td>
       <td class="actions">
         <button type="button" class="btn ghost sm" data-edit="${esc(p.id)}">Edit</button>
@@ -222,9 +238,6 @@ function fillFormForEdit(product) {
   $('#p').value = product.price;
   $('#op').value = product.originalPrice || '';
   $('#stk').value = product.stock ?? 0;
-  $('#promo').value = product.promo || '';
-  $('#bxgy_buy').value = product.bxgy?.buy || '';
-  $('#bxgy_free').value = product.bxgy?.free || '';
   $('#d').value = product.desc || '';
   $('#pv').hidden = true;
   openFormDialog();
@@ -267,7 +280,6 @@ $('#f').addEventListener('submit', async e => {
       image = `${C.imageDir}/${Date.now()}.jpg`;
       await ghPutFile(image, await shrinkImage(file), 'Upload gambar produk');
     }
-    const buy = +$('#bxgy_buy').value || 0, free = +$('#bxgy_free').value || 0;
     const item = {
       id: state.editingId || Date.now().toString(36),
       name: $('#n').value.trim(),
@@ -275,8 +287,6 @@ $('#f').addEventListener('submit', async e => {
       price: +$('#p').value,
       originalPrice: +$('#op').value || 0,
       stock: +$('#stk').value || 0,
-      promo: $('#promo').value.trim(),
-      bxgy: (buy && free) ? { buy, free } : null,
       status: (+$('#stk').value || 0) <= 0 ? 'habis' : 'tersedia',
       desc: $('#d').value.trim(),
       image,
@@ -400,7 +410,111 @@ $('#bf').addEventListener('submit', async e => {
   saveBtn.textContent = 'Simpan banner';
 });
 
-/* ---------- 9. Init ---------- */
+/* ---------- 9. Promo pintar ---------- */
+function productOptions(selectedId) {
+  return state.products.map(p => `<option value="${esc(p.id)}" ${p.id == selectedId ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+}
+function fillPromoProductSelects() {
+  ['pr1_product', 'pr2_a', 'pr2_b', 'pr3_a', 'pr3_b'].forEach(id => { $('#' + id).innerHTML = productOptions(); });
+}
+function showPromoBox(type) {
+  document.querySelectorAll('.promo-box').forEach(b => b.classList.remove('on'));
+  $('#pr_box_' + type).classList.add('on');
+}
+$('#pr_type').addEventListener('change', e => showPromoBox(e.target.value));
+
+function renderPromoTable() {
+  const list = state.promos;
+  $('#prcnt').textContent = `(${list.length})`;
+  $('#prempty').hidden = list.length > 0;
+  const typeName = { bxgy_self: 'Beli X Gratis (sama)', bxgy_cross: 'Beli A Gratis B', bundle: 'Bundel diskon' };
+  $('#prtbody').innerHTML = list.map(pr => `
+    <tr>
+      <td>${typeName[pr.type] || pr.type}${pr.active === false ? ' <span class="status-out">(nonaktif)</span>' : ''}</td>
+      <td>${esc(promoLabel(pr))}</td>
+      <td class="actions">
+        <button type="button" class="btn ghost sm" data-predit="${esc(pr.id)}">Edit</button>
+        <button type="button" class="btn bad sm" data-prdel="${esc(pr.id)}">Hapus</button>
+      </td>
+    </tr>`).join('');
+}
+function resetPromoForm() {
+  state.editingPromoId = null;
+  $('#prf').reset();
+  $('#prft').textContent = 'Tambah promo';
+  fillPromoProductSelects();
+  showPromoBox($('#pr_type').value);
+}
+function fillPromoForEdit(pr) {
+  state.editingPromoId = pr.id;
+  $('#prft').textContent = 'Edit promo';
+  fillPromoProductSelects();
+  $('#pr_type').value = pr.type;
+  showPromoBox(pr.type);
+  $('#pr_active').checked = pr.active !== false;
+  if (pr.type === 'bxgy_self') { $('#pr1_product').value = pr.productId; $('#pr1_buy').value = pr.buy; $('#pr1_free').value = pr.free; }
+  if (pr.type === 'bxgy_cross') { $('#pr2_a').value = pr.a; $('#pr2_aqty').value = pr.aQty; $('#pr2_b').value = pr.b; $('#pr2_bqty').value = pr.bQty; }
+  if (pr.type === 'bundle') { $('#pr3_a').value = pr.a; $('#pr3_aqty').value = pr.aQty; $('#pr3_b').value = pr.b; $('#pr3_bqty').value = pr.bQty; $('#pr3_disc').value = pr.discount; }
+  $('#promoDl').showModal();
+}
+$('#addPromoBtn').addEventListener('click', () => {
+  if (!state.products.length) { toast('Tambahkan produk dulu sebelum membuat promo.', true); return; }
+  resetPromoForm();
+  $('#promoDl').showModal();
+});
+$('#pr_cx').addEventListener('click', () => $('#promoDl').close());
+$('#prclose').addEventListener('click', () => $('#promoDl').close());
+$('#promoDl').addEventListener('click', e => { if (e.target.id === 'promoDl') e.target.close(); });
+
+$('#prtbody').addEventListener('click', async e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  if (btn.dataset.predit) fillPromoForEdit(state.promos.find(p => p.id == btn.dataset.predit));
+  if (btn.dataset.prdel) {
+    if (!confirm('Hapus promo ini?')) return;
+    btn.disabled = true;
+    try { await mutatePromos(data => { data.promos = data.promos.filter(x => x.id != btn.dataset.prdel); }, 'Hapus promo'); toast('Promo dihapus'); }
+    catch (err) { toast(err.message, true); btn.disabled = false; }
+  }
+});
+
+$('#prf').addEventListener('submit', async e => {
+  e.preventDefault();
+  const type = $('#pr_type').value;
+  const active = $('#pr_active').checked;
+  let item = { id: state.editingPromoId || Date.now().toString(36), type, active, updated: new Date().toISOString() };
+
+  if (type === 'bxgy_self') {
+    const productId = $('#pr1_product').value, buy = +$('#pr1_buy').value, free = +$('#pr1_free').value;
+    if (!productId || !buy || !free) { toast('Lengkapi produk, jumlah beli, dan jumlah gratis.', true); return; }
+    Object.assign(item, { productId, buy, free });
+  } else if (type === 'bxgy_cross') {
+    const a = $('#pr2_a').value, aQty = +$('#pr2_aqty').value, b = $('#pr2_b').value, bQty = +$('#pr2_bqty').value;
+    if (!a || !b || !aQty || !bQty) { toast('Lengkapi produk A, produk B, dan jumlahnya.', true); return; }
+    if (a === b) { toast('Produk A dan B tidak boleh sama. Untuk promo produk yang sama, pilih jenis "Beli X Gratis produk yang sama".', true); return; }
+    Object.assign(item, { a, aQty, b, bQty });
+  } else if (type === 'bundle') {
+    const a = $('#pr3_a').value, aQty = +$('#pr3_aqty').value, b = $('#pr3_b').value, bQty = +$('#pr3_bqty').value, discount = +$('#pr3_disc').value;
+    if (!a || !b || !aQty || !bQty || !discount) { toast('Lengkapi produk A, produk B, jumlah, dan potongan harga.', true); return; }
+    if (a === b) { toast('Produk A dan B tidak boleh sama.', true); return; }
+    Object.assign(item, { a, aQty, b, bQty, discount });
+  }
+
+  const saveBtn = $('#pr_sv');
+  saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan…';
+  try {
+    await mutatePromos(data => {
+      const i = data.promos.findIndex(x => x.id == item.id);
+      i < 0 ? data.promos.push(item) : (data.promos[i] = item);
+    }, `${state.editingPromoId ? 'Ubah' : 'Tambah'} promo`);
+    resetPromoForm();
+    $('#promoDl').close();
+    toast('Promo tersimpan');
+  } catch (err) { toast(err.message, true); }
+  saveBtn.disabled = false; saveBtn.textContent = 'Simpan promo';
+});
+
+/* ---------- 10. Init ---------- */
 $('#go').addEventListener('click', async () => {
   const btn = $('#go');
   state.token = $('#tok').value.trim();
